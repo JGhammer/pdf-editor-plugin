@@ -1,4 +1,4 @@
-import { defineComponent, ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { defineComponent, ref, onMounted, onBeforeUnmount, nextTick, h } from 'vue'
 import { PDFParser, PDFModifier } from '../../core/pdf-parser'
 import { RichTextEditor } from '../../core/rich-text-editor'
 
@@ -183,66 +183,98 @@ export default defineComponent({
       if (fileInput.value) fileInput.value.value = ''
     }
 
-    const wrapperStyle = () => ({
-      width: props.editorStyle?.width || undefined,
-      background: props.editorStyle?.background || undefined,
-    })
-    const editorContainerStyle = () => ({
-      height: props.editorStyle?.height || undefined,
-      minHeight: props.editorStyle?.minHeight || undefined,
-      background: props.editorStyle?.background || undefined,
-      borderRadius: props.editorStyle?.borderRadius || undefined,
-    })
-    const editorInnerStyle = () => ({
-      height: props.editorStyle?.height || undefined,
-      minHeight: props.editorStyle?.minHeight || undefined,
-      padding: props.editorStyle?.padding || undefined,
-      fontSize: props.editorStyle?.fontSize || undefined,
-      fontFamily: props.editorStyle?.fontFamily || undefined,
-      color: props.editorStyle?.textColor || undefined,
+    expose({
+      clearFile,
+      exportPDF,
+      removeWatermark
     })
 
-    return {
-      editorRef, fileInput, imageInput,
-      fileName, hasPDF, hasContent, isProcessing, watermarks,
-      triggerFileInput, triggerImageInput,
-      handleFileUpload, handleImageReplace,
-      removeWatermark, removeSpecificWatermark,
-      exportPDF, clearFile,
-      wrapperStyle, editorContainerStyle, editorInnerStyle
+    return () => {
+      const s = props.editorStyle || {}
+      const wrapperStyle = {
+        width: s.width || undefined,
+        background: s.background || undefined,
+      }
+      const editorContainerStyle = {
+        height: s.height || undefined,
+        minHeight: s.minHeight || undefined,
+        background: s.background || undefined,
+        borderRadius: s.borderRadius || undefined,
+      }
+      const editorInnerStyle = {
+        height: s.height || undefined,
+        minHeight: s.minHeight || undefined,
+        padding: s.padding || undefined,
+        fontSize: s.fontSize || undefined,
+        fontFamily: s.fontFamily || undefined,
+        color: s.textColor || undefined,
+      }
+
+      const watermarkItems = watermarks.value.map((wm, index) =>
+        h('li', { key: index }, [
+          wm.content + ' ',
+          h('button', {
+            class: 'remove-wm-btn',
+            onClick: () => removeSpecificWatermark(index)
+          }, '移除')
+        ])
+      )
+
+      return h('div', { class: 'pdf-editor-wrapper', style: wrapperStyle }, [
+        h('div', { class: 'editor-header' }, [
+          h('h3', { class: 'editor-title' }, '文档编辑'),
+          h('div', { class: 'header-actions' }, [
+            hasPDF.value ? h('button', {
+              class: 'action-btn watermark-btn',
+              disabled: isProcessing.value,
+              onClick: removeWatermark
+            }, isProcessing.value ? '处理中...' : '去除水印') : null,
+            h('button', {
+              class: 'action-btn export-btn',
+              disabled: !hasContent.value,
+              onClick: exportPDF
+            }, '导出PDF')
+          ].filter(Boolean))
+        ]),
+        h('div', { class: 'toolbar-section' }, [
+          h('input', {
+            type: 'file',
+            ref: fileInput,
+            accept: '.pdf',
+            style: { display: 'none' },
+            onChange: handleFileUpload
+          }),
+          h('button', { class: 'upload-btn', onClick: triggerFileInput }, [
+            h('span', { class: 'icon' }, '📄'),
+            ' 上传PDF文件'
+          ]),
+          fileName.value ? h('div', { class: 'file-info' }, [
+            h('span', { class: 'file-name' }, fileName.value),
+            h('button', { class: 'clear-btn', onClick: clearFile }, '×')
+          ]) : null
+        ].filter(Boolean)),
+        h('div', { class: 'editor-container', style: editorContainerStyle }, [
+          h('div', { ref: editorRef, class: 'rich-text-editor', style: editorInnerStyle })
+        ]),
+        watermarks.value.length > 0 ? h('div', { class: 'watermark-panel' }, [
+          h('h4', null, '检测到的水印：'),
+          h('ul', null, watermarkItems)
+        ]) : null,
+        hasPDF.value ? h('div', { class: 'image-replace-section' }, [
+          h('h4', null, '图片替换'),
+          h('input', {
+            type: 'file',
+            ref: imageInput,
+            accept: 'image/*',
+            style: { display: 'none' },
+            onChange: handleImageReplace
+          }),
+          h('button', {
+            class: 'replace-image-btn',
+            onClick: triggerImageInput
+          }, '选择新图片替换')
+        ]) : null
+      ].filter(Boolean))
     }
-  },
-  template: `
-    <div class="pdf-editor-wrapper" :style="wrapperStyle()">
-      <div class="editor-header">
-        <h3 class="editor-title">文档编辑</h3>
-        <div class="header-actions">
-          <button v-if="hasPDF" @click="removeWatermark" class="action-btn watermark-btn" :disabled="isProcessing">
-            {{ isProcessing ? '处理中...' : '去除水印' }}
-          </button>
-          <button @click="exportPDF" class="action-btn export-btn" :disabled="!hasContent">导出PDF</button>
-        </div>
-      </div>
-      <div class="toolbar-section">
-        <input type="file" ref="fileInput" accept=".pdf" @change="handleFileUpload" style="display:none" />
-        <button @click="triggerFileInput" class="upload-btn"><span class="icon">📄</span> 上传PDF文件</button>
-        <div v-if="fileName" class="file-info">
-          <span class="file-name">{{ fileName }}</span>
-          <button @click="clearFile" class="clear-btn">×</button>
-        </div>
-      </div>
-      <div class="editor-container" :style="editorContainerStyle()">
-        <div ref="editorRef" class="rich-text-editor" :style="editorInnerStyle()"></div>
-      </div>
-      <div v-if="watermarks.length > 0" class="watermark-panel">
-        <h4>检测到的水印：</h4>
-        <ul><li v-for="(wm, index) in watermarks" :key="index">{{ wm.content }} <button @click="removeSpecificWatermark(index)" class="remove-wm-btn">移除</button></li></ul>
-      </div>
-      <div v-if="hasPDF" class="image-replace-section">
-        <h4>图片替换</h4>
-        <input type="file" ref="imageInput" accept="image/*" @change="handleImageReplace" style="display:none" />
-        <button @click="triggerImageInput" class="replace-image-btn">选择新图片替换</button>
-      </div>
-    </div>
-  `
+  }
 })
