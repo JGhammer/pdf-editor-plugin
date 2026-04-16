@@ -1,8 +1,29 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-import Tesseract from "tesseract.js";
+//import Tesseract from "tesseract.js";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+let _workerInitialized = false;
+
+export function initPDFWorker(workerSrc?: string) {
+  if (_workerInitialized) return;
+  _workerInitialized = true;
+
+  if (workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+    return;
+  }
+
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.js",
+      import.meta.url,
+    ).toString();
+  } catch {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  }
+}
+
+initPDFWorker();
 
 export interface PDFPage {
   pageNumber: number;
@@ -93,7 +114,13 @@ export class PDFParser {
     const textContent = await page.getTextContent();
 
     let fullText = "";
-    const textItems: Array<{ str: string; x: number; y: number; fontSize: number; fontName: string }> = [];
+    const textItems: Array<{
+      str: string;
+      x: number;
+      y: number;
+      fontSize: number;
+      fontName: string;
+    }> = [];
     textContent.items.forEach((item: any) => {
       fullText += item.str + " ";
       if (item.str && item.str.trim()) {
@@ -283,7 +310,12 @@ export class PDFModifier {
     }
 
     const textContent = this.stripHTML(content);
-    const lines = this.wrapText(textContent, font, fontSize, pageWidth - margin * 2);
+    const lines = this.wrapText(
+      textContent,
+      font,
+      fontSize,
+      pageWidth - margin * 2,
+    );
 
     let yPosition = pageHeight - margin;
     let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -347,7 +379,9 @@ export class PDFModifier {
   }
 
   static downloadPDF(pdfBytes: Uint8Array, fileName: string = "document.pdf") {
-    const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+    const blob = new Blob([new Uint8Array(pdfBytes)], {
+      type: "application/pdf",
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

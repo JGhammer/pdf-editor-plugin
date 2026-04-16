@@ -1,22 +1,13 @@
-# 源代码
 src/
 examples/
-
-# 配置文件
 tsconfig.json
 rollup.config.js
 .gitignore
-
-# 开发文件
 *.log
 .DS_Store
 node_modules/
-
-# 文档
 QUICKSTART.md
 CHANGELOG.md
-
-# 测试文件
 *.test.ts
 *.spec.ts
 __tests__/

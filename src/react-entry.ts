@@ -1,3 +1,4 @@
+export { default } from "./components/react/PdfEditor";
 export { PDFParser, PDFModifier, initPDFWorker } from "./core/pdf-parser";
 export { RichTextEditor } from "./core/rich-text-editor";
 
@@ -13,6 +14,3 @@ export type {
   EditorStyle,
   FontStyle,
 } from "./core/rich-text-editor";
-
-import PdfEditorReact from "./components/react/PdfEditor";
-export default PdfEditorReact;

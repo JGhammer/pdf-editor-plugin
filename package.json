@@ -1,6 +1,6 @@
 {
   "name": "pdf-editor-plugin",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "A PDF editor plugin for Vue and React projects with rich text editing capabilities",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
@@ -11,19 +11,23 @@
       "require": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./react": {
+      "import": "./dist/react.js",
+      "require": "./dist/react.cjs.js",
+      "types": "./dist/react-entry.d.ts"
+    },
     "./vue3": {
-      "import": "./src/components/vue/PdfEditor.vue",
-      "types": "./src/components/vue/PdfEditor.vue"
+      "import": "./dist/vue3.js",
+      "types": "./dist/vue3-entry.d.ts"
     },
     "./vue2": {
-      "import": "./src/components/vue/PdfEditorVue2.vue",
-      "types": "./src/components/vue/PdfEditorVue2.vue"
+      "import": "./dist/vue2.js",
+      "types": "./dist/vue2-entry.d.ts"
     },
-    "./dist/style.css": "./dist/style.css"
+    "./style.css": "./dist/style.css"
   },
   "files": [
-    "dist",
-    "src/components/vue"
+    "dist"
   ],
   "scripts": {
     "build": "rollup -c",
@@ -67,8 +71,7 @@
   "dependencies": {
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^3.11.174",
-    "quill": "^1.3.7",
-    "tesseract.js": "^5.0.4"
+    "quill": "^1.3.7"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^25.0.0",
@@ -79,12 +82,10 @@
     "@types/react-dom": "^18.0.0",
     "rollup": "^4.0.0",
     "rollup-plugin-postcss": "^4.0.2",
-    "rollup-plugin-vue": "^6.0.0",
     "typescript": "^5.0.0",
     "vue": "^3.4.0"
   },
   "sideEffects": [
-    "**/*.css",
-    "**/*.vue"
+    "**/*.css"
   ]
 }
