@@ -1,62 +1,63 @@
 # PDF Editor Plugin
 
-一个功能强大的PDF编辑器插件，支持 **Vue 2**、**Vue 3** 和 **React 18** 项目。提供富文本编辑、图片替换、水印去除等功能。
+[![npm version](https://badge.fury.io/js/pdf-editor-plugin.svg)](https://badge.fury.io/js/pdf-editor-plugin)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-![PDF Editor](https://via.placeholder.com/800x400/1a1a2e/00d9ff?text=PDF+Editor+Plugin)
+一个功能强大的 PDF 编辑器插件，支持 **Vue 2**、**Vue 3** 和 **React 18** 项目。提供富文本编辑、图片替换、水印去除、自定义样式等功能。
 
 ## ✨ 功能特性
 
-- 📄 **PDF文件上传与解析** - 支持上传PDF文件并自动提取文本内容
-- ✏️ **富文本编辑** - 基于Quill.js的强大编辑器，支持：
+- 📄 **PDF 文件上传与解析** - 支持上传 PDF 文件并自动提取文本和图片内容
+- ✏️ **富文本编辑** - 基于 Quill.js 的强大编辑器，支持：
   - 文本格式化（粗体、斜体、下划线、删除线）
   - 字体大小和颜色调整
   - 段落对齐方式
   - 有序/无序列表
   - 图片插入和替换
   - 链接插入
-- 🖼️ **图片替换** - 支持替换PDF中的图片
-- 💧 **水印检测与去除** - 自动检测并移除PDF中的文字水印
-- 📤 **PDF导出** - 将编辑后的内容导出为新的PDF文件
-- 🎨 **现代化UI** - 深色主题设计，美观易用
+- 🖼️ **图片替换** - 支持替换 PDF 中的图片
+- 💧 **水印检测与去除** - 自动检测并移除 PDF 中的文字水印
+- 📤 **PDF 导出下载** - 将编辑后的内容导出为 PDF 文件并自动下载
+- 🎨 **自定义编辑区样式** - 通过参数指定编辑区域的宽高、背景色等
+- 📘 **TypeScript 支持** - 完整的类型定义
 
 ## 📦 安装
 
-### 使用 npm
-
 ```bash
+# 使用 npm
 npm install pdf-editor-plugin
-```
 
-### 使用 yarn
-
-```bash
+# 使用 yarn
 yarn add pdf-editor-plugin
-```
 
-### 使用 pnpm
-
-```bash
+# 使用 pnpm
 pnpm add pdf-editor-plugin
 ```
 
 ## 🚀 快速开始
 
-### React 项目中使用（推荐）
+### React 项目中使用
 
 ```jsx
-import { PdfEditorReact } from 'pdf-editor-plugin'
+import PdfEditor from 'pdf-editor-plugin'
+import 'pdf-editor-plugin/dist/style.css'
 
 function App() {
   return (
-    <div style={{ padding: '20px' }}>
-      <h1>PDF 编辑器</h1>
-      <PdfEditorReact
-        placeholder="请上传或输入内容..."
-        onContentChange={(data) => console.log('内容变化:', data.html)}
-        onPdfLoaded={(data) => console.log('PDF加载完成，共', data.pages.length, '页')}
-        onPdfExported={(pdfBytes) => console.log('PDF已导出')}
-      />
-    </div>
+    <PdfEditor
+      placeholder="请上传或输入内容..."
+      editorStyle={{
+        width: '100%',
+        height: '600px',
+        background: '#1a1a2e',
+        fontSize: '14px',
+        textColor: '#ffffff'
+      }}
+      exportFileName="my-document"
+      onContentChange={(data) => console.log('内容变化:', data.html)}
+      onPdfLoaded={(data) => console.log('PDF 加载完成')}
+      onPdfExported={(pdfBytes) => console.log('PDF 已导出')}
+    />
   )
 }
 
@@ -65,54 +66,72 @@ export default App
 
 ### Vue 3 项目中使用
 
-使用 TypeScript + Composition API：
-
 ```vue
 <template>
   <PdfEditor 
+    placeholder="请上传 PDF 文件..."
+    :editor-style="{
+      width: '100%',
+      height: '600px',
+      background: '#1a1a2e',
+      fontSize: '14px',
+      textColor: '#ffffff'
+    }"
+    export-file-name="my-document"
     @content-change="handleContentChange"
     @pdf-loaded="handlePdfLoaded"
-    placeholder="请上传PDF文件..."
+    @pdf-exported="handlePdfExported"
   />
 </template>
 
-<script setup lang="ts">
-import PdfEditor from 'pdf-editor-plugin/src/components/vue/PdfEditor.vue'
+<script setup>
+import PdfEditor from 'pdf-editor-plugin/vue3'
+import 'pdf-editor-plugin/dist/style.css'
 
 const handleContentChange = ({ html, delta }) => {
   console.log('内容变化:', html)
 }
 
 const handlePdfLoaded = ({ pages, watermarks }) => {
-  console.log('PDF加载成功')
+  console.log('PDF 加载成功，共', pages.length, '页')
+}
+
+const handlePdfExported = (pdfBytes) => {
+  console.log('PDF 已导出')
 }
 </script>
 ```
 
 ### Vue 2 项目中使用
 
-使用 Options API：
-
 ```vue
 <template>
   <PdfEditor 
+    placeholder="请上传 PDF 文件..."
+    :editor-style="editorStyle"
+    export-file-name="my-document"
     @content-change="handleContentChange"
-    @pdf-loaded="handlePdfLoaded"
-    placeholder="请上传PDF文件..."
   />
 </template>
 
 <script>
-import PdfEditor from 'pdf-editor-plugin/src/components/vue/PdfEditorVue2.vue'
+import PdfEditor from 'pdf-editor-plugin/vue2'
+import 'pdf-editor-plugin/dist/style.css'
 
 export default {
   components: { PdfEditor },
+  data() {
+    return {
+      editorStyle: {
+        width: '100%',
+        height: '600px',
+        background: '#1a1a2e'
+      }
+    }
+  },
   methods: {
-    handleContentChange({ html, delta }) {
+    handleContentChange({ html }) {
       console.log('内容变化:', html)
-    },
-    handlePdfLoaded({ pages, watermarks }) {
-      console.log('PDF加载成功')
     }
   }
 }
@@ -127,7 +146,41 @@ export default {
 |--------|------|--------|------|
 | `placeholder` | `string` | `'请输入或粘贴PDF内容...'` | 编辑器占位符文本 |
 | `readOnly` | `boolean` | `false` | 是否只读模式 |
-| `initialContent` | `string` | `''` | 初始HTML内容 |
+| `initialContent` | `string` | `''` | 初始 HTML 内容 |
+| `editorStyle` | `EditorStyle` | `{}` | 编辑区自定义样式 |
+| `exportFileName` | `string` | `'edited-document'` | 导出 PDF 文件名（不含扩展名） |
+| `exportOptions` | `ExportPDFOptions` | `{}` | 导出 PDF 高级选项 |
+
+### EditorStyle 类型
+
+```typescript
+interface EditorStyle {
+  width?: string        // 编辑区宽度，如 '100%', '800px'
+  height?: string       // 编辑区高度，如 '600px', '80vh'
+  minHeight?: string    // 最小高度，如 '400px'
+  background?: string   // 背景色，如 '#1a1a2e', 'white'
+  borderColor?: string  // 边框颜色
+  borderRadius?: string // 圆角大小
+  padding?: string      // 内边距
+  fontSize?: string     // 字体大小，如 '14px'
+  fontFamily?: string   // 字体族，如 'Arial, sans-serif'
+  textColor?: string    // 文字颜色，如 '#ffffff'
+}
+```
+
+### ExportPDFOptions 类型
+
+```typescript
+interface ExportPDFOptions {
+  fileName?: string                    // 文件名
+  pageSize?: 'A4' | 'Letter' | 'Legal' // 纸张大小，默认 A4
+  orientation?: 'portrait' | 'landscape' // 页面方向，默认 portrait
+  margin?: number                      // 页边距，默认 50
+  fontSize?: number                    // 字体大小，默认 12
+  fontFamily?: string                  // 字体族
+  textColor?: { r: number; g: number; b: number } // 文字颜色 RGB
+}
+```
 
 ### Events 事件
 
@@ -136,8 +189,8 @@ export default {
 | 事件名 | 参数 | 说明 |
 |--------|------|------|
 | `content-change` | `{ html: string, delta: object }` | 内容变化时触发 |
-| `pdf-loaded` | `{ pages: array, watermarks: array }` | PDF加载完成时触发 |
-| `pdf-exported` | `Uint8Array` | PDF导出完成时触发 |
+| `pdf-loaded` | `{ pages: array, watermarks: array }` | PDF 加载完成时触发 |
+| `pdf-exported` | `Uint8Array` | PDF 导出完成时触发 |
 | `error` | `Error` | 发生错误时触发 |
 
 #### React 组件属性
@@ -145,27 +198,24 @@ export default {
 | 属性名 | 类型 | 说明 |
 |--------|------|------|
 | `onContentChange` | `(data) => void` | 内容变化回调 |
-| `onPdfLoaded` | `(data) => void` | PDF加载完成回调 |
-| `onPdfExported` | `(pdfBytes) => void` | PDF导出完成回调 |
+| `onPdfLoaded` | `(data) => void` | PDF 加载完成回调 |
+| `onPdfExported` | `(pdfBytes) => void` | PDF 导出完成回调 |
 | `onError` | `(error) => void` | 错误回调 |
 
 ### 高级用法：使用核心类
 
-如果需要更精细的控制，可以直接使用核心类：
-
 ```javascript
 import { PDFParser, PDFModifier, RichTextEditor } from 'pdf-editor-plugin'
 
-// 1. 创建PDF解析器实例
+// 1. 创建 PDF 解析器实例
 const parser = new PDFParser()
 
-// 2. 加载PDF文件
+// 2. 加载 PDF 文件
 const fileInput = document.querySelector('input[type="file"]')
 fileInput.onchange = async (e) => {
   const file = e.target.files[0]
   const pages = await parser.loadPDF(file)
   
-  // 获取所有页面内容
   pages.forEach(page => {
     console.log(`第 ${page.pageNumber} 页:`)
     console.log('文本内容:', page.textContent)
@@ -174,7 +224,6 @@ fileInput.onchange = async (e) => {
   
   // 3. 检测水印
   const watermarks = await parser.detectWatermarks()
-  console.log('检测到的水印:', watermarks)
   
   // 4. 去除水印
   const modifier = new PDFModifier()
@@ -183,120 +232,112 @@ fileInput.onchange = async (e) => {
     ['水印文本1', '水印文本2']
   )
   
-  // 5. 导出修改后的PDF
-  const blob = new Blob([new Uint8Array(modifiedPdfBytes)], { type: 'application/pdf' })
-  const url = URL.createObjectURL(blob)
-  window.open(url)
+  // 5. 导出并下载 PDF
+  PDFModifier.downloadPDF(modifiedPdfBytes, 'output.pdf')
 }
-```
 
-### 富文本编辑器高级用法
-
-```javascript
-import { RichTextEditor } from 'pdf-editor-plugin'
-
-// 创建编辑器实例
+// 6. 自定义富文本编辑器
 const editor = new RichTextEditor('#editor-container', {
-  theme: 'snow',
-  placeholder: '开始编辑...',
+  style: {
+    width: '800px',
+    height: '600px',
+    background: '#ffffff',
+    fontSize: '16px',
+    textColor: '#333333'
+  },
   onContentChange: (html, delta) => {
     console.log('内容更新:', html)
   },
   onImageUpload: async (file) => {
-    // 自定义图片上传逻辑
     const formData = new FormData()
     formData.append('image', file)
-    
-    const response = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData
-    })
+    const response = await fetch('/api/upload', { method: 'POST', body: formData })
     const data = await response.json()
     return data.url
   }
 })
 
-// 应用字体样式
-editor.applyStyle({
-  bold: true,
-  italic: false,
-  size: '18px',
-  color: '#ff0000',
-  align: 'center',
-  font: 'Arial'
-})
-
-// 插入图片
-editor.insertImage('/path/to/image.jpg')
+// 获取所有图片
+const images = editor.getAllImages()
 
 // 替换图片
 editor.replaceImage('/old-image.jpg', '/new-image.jpg')
 
-// 查找并替换文本
+// 查找替换文本
 editor.findAndReplace('旧文本', '新文本')
 
-// 获取内容
-const htmlContent = editor.getContent()
-const textContent = editor.getText()
-
-// 设置内容
-editor.setContent('<p>Hello World!</p>')
+// 动态更新样式
+editor.updateStyle({ background: '#f0f0f0', fontSize: '18px' })
 ```
-
-## 🔧 配置选项
-
-### 编辑器工具栏配置
-
-默认工具栏包含以下功能：
-- 标题级别（H1-H3）
-- 文本格式（粗体、斜体、下划线、删除线）
-- 文字颜色和背景色
-- 对齐方式
-- 列表（有序、无序）
-- 缩进
-- 链接、图片、视频插入
-- 清除格式
-
-如需自定义工具栏，可以通过修改源代码中的 `RichTextEditor` 类来实现。
 
 ## 🎯 使用场景
 
-- 📝 **文档编辑** - 在线编辑PDF文档内容
-- 🔄 **内容修改** - 批量修改PDF中的文本和图片
+- 📝 **文档编辑** - 在线编辑 PDF 文档内容
+- 🔄 **内容修改** - 批量修改 PDF 中的文本和图片
 - 💧 **水印处理** - 移除不需要的水印信息
-- 📚 **文档转换** - 将富文本内容转换为PDF格式
-- 🖼️ **图片管理** - 替换PDF中的图片资源
+- 📚 **文档转换** - 将富文本内容转换为 PDF 格式
+- 🖼️ **图片管理** - 替换 PDF 中的图片资源
 
 ## ⚙️ 技术栈
 
-- **PDF解析**: [pdfjs-dist](https://github.com/nickmccurdy/pdfjs-dist) + [Tesseract.js](https://github.com/naptha/tesseract.js)
-- **PDF操作**: [pdf-lib](https://github.com/Hopding/pdf-lib)
+- **PDF 解析**: [pdfjs-dist](https://github.com/nickmccurdy/pdfjs-dist) + [Tesseract.js](https://github.com/naptha/tesseract.js)
+- **PDF 操作**: [pdf-lib](https://github.com/Hopding/pdf-lib)
 - **富文本编辑**: [Quill.js](https://quilljs.com/)
 - **框架支持**: Vue 2 / Vue 3 / React 18
 
 ## 🐛 常见问题
 
-### Q: 上传PDF后显示乱码？
+### Q: 上传 PDF 后显示乱码？
 
-A: 这通常是因为PDF使用了特殊编码或扫描件。插件会尝试使用OCR识别文本，但识别率取决于图像质量。
+A: 这通常是因为 PDF 使用了特殊编码或扫描件。插件会尝试使用 OCR 识别文本，但识别率取决于图像质量。
 
 ### Q: 水印无法完全去除？
 
 A: 水印去除功能主要针对文字水印。对于图片形式的水印，需要使用图像处理技术，当前版本支持有限。
 
-### Q: 导出的PDF格式丢失？
+### Q: 导出的 PDF 格式丢失？
 
-A: 当前版本的PDF导出会保留基本的文本格式，但复杂的排版可能无法完美还原。建议在导出前检查预览。
+A: 当前版本的 PDF 导出会保留基本的文本格式，但复杂的排版可能无法完美还原。建议在导出前检查预览。
 
-### Q: 如何自定义样式？
+### Q: 如何自定义编辑区样式？
 
-A: 可以通过CSS覆盖默认样式，或者直接修改组件的 `<style>` 部分。
+A: 通过 `editorStyle` 属性指定：
 
-### Q: Vue 2 和 Vue 3 版本有什么区别？
+```jsx
+<PdfEditor
+  editorStyle={{
+    width: '100%',
+    height: '600px',
+    background: '#ffffff',
+    fontSize: '16px',
+    textColor: '#333333'
+  }}
+/>
+```
 
-A: 
-- **Vue 3 版本** (`PdfEditor.vue`): 使用 TypeScript + Composition API (`<script setup>`)，提供更好的类型支持
-- **Vue 2 版本** (`PdfEditorVue2.vue`): 使用 Options API，兼容 Vue 2.x 项目
+### Q: 如何自定义导出 PDF 的文件名？
+
+A: 通过 `exportFileName` 属性指定：
+
+```jsx
+<PdfEditor exportFileName="my-document" />
+```
+
+### Q: 在 Vite 项目中使用报错？
+
+A: 确保正确导入样式文件：
+```javascript
+import 'pdf-editor-plugin/dist/style.css'
+```
+
+如果遇到模块解析问题，可以在 `vite.config.js` 中添加：
+```javascript
+export default {
+  optimizeDeps: {
+    include: ['pdf-editor-plugin']
+  }
+}
+```
 
 ## 📄 许可证
 
@@ -306,8 +347,13 @@ MIT License
 
 欢迎提交 Issue 和 Pull Request！
 
+## 📮 联系方式
+
+- **作者**: JGhammer
+- **GitHub**: [https://github.com/JGhammer/pdf-editor-plugin](https://github.com/JGhammer/pdf-editor-plugin)
+- **Issues**: [https://github.com/JGhammer/pdf-editor-plugin/issues](https://github.com/JGhammer/pdf-editor-plugin/issues)
+
 ---
 
-**作者**: PDF Editor Plugin Team  
 **版本**: 1.0.0  
 **最后更新**: 2026-04-15

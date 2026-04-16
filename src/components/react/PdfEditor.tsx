@@ -1,14 +1,17 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
-import { PDFParser, PDFModifier } from "../../core/pdf-parser";
-import { RichTextEditor, EditorConfig } from "../../core/rich-text-editor";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { PDFParser, PDFModifier, ExportPDFOptions } from "../../core/pdf-parser";
+import { RichTextEditor, EditorConfig, EditorStyle } from "../../core/rich-text-editor";
 
 interface PdfEditorProps {
   placeholder?: string;
   readOnly?: boolean;
   initialContent?: string;
+  editorStyle?: EditorStyle;
+  exportFileName?: string;
+  exportOptions?: ExportPDFOptions;
   onContentChange?: (data: { html: string; delta: any }) => void;
   onPdfLoaded?: (data: { pages: any[]; watermarks: any[] }) => void;
-  onPdfExported?: (pdfBytes: ArrayBuffer) => void;
+  onPdfExported?: (pdfBytes: Uint8Array) => void;
   onError?: (error: any) => void;
 }
 
@@ -16,6 +19,9 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
   placeholder = "请输入或粘贴PDF内容...",
   readOnly = false,
   initialContent = "",
+  editorStyle = {},
+  exportFileName = "edited-document",
+  exportOptions = {},
   onContentChange,
   onPdfLoaded,
   onPdfExported,
@@ -35,11 +41,42 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
   const pdfParserRef = useRef<PDFParser | null>(null);
   const pdfModifierRef = useRef<PDFModifier | null>(null);
 
+  const wrapperStyle = useMemo(
+    () => ({
+      width: editorStyle.width || undefined,
+      background: editorStyle.background || undefined,
+    }),
+    [editorStyle],
+  );
+
+  const containerStyle = useMemo(
+    () => ({
+      height: editorStyle.height || undefined,
+      minHeight: editorStyle.minHeight || undefined,
+      background: editorStyle.background || undefined,
+      borderRadius: editorStyle.borderRadius || undefined,
+    }),
+    [editorStyle],
+  );
+
+  const innerStyle = useMemo(
+    () => ({
+      height: editorStyle.height || undefined,
+      minHeight: editorStyle.minHeight || undefined,
+      padding: editorStyle.padding || undefined,
+      fontSize: editorStyle.fontSize || undefined,
+      fontFamily: editorStyle.fontFamily || undefined,
+      color: editorStyle.textColor || undefined,
+    }),
+    [editorStyle],
+  );
+
   useEffect(() => {
     if (editorRef.current && !editorInstance.current) {
       const config: EditorConfig = {
         placeholder,
         readOnly,
+        style: editorStyle,
         onContentChange: (html, delta) => {
           setHasContent(!!html && html !== "<p><br></p>");
           onContentChange?.({ html, delta });
@@ -94,6 +131,11 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
             if (index > 0) fullContent += "<br/><br/>";
             fullContent += `<h2>第 ${page.pageNumber} 页</h2>`;
             fullContent += `<p>${page.textContent}</p>`;
+            if (page.images.length > 0) {
+              page.images.forEach((img) => {
+                fullContent += `<p><img src="${img.dataUrl}" style="max-width:100%;" /></p>`;
+              });
+            }
           });
 
           setTimeout(() => {
@@ -121,15 +163,22 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
 
-      if (file && pdfParserRef.current?.getPDFBytes()) {
+      if (file) {
         try {
           setIsProcessing(true);
-          await pdfModifierRef.current!.replaceImage(
-            pdfParserRef.current.getPDFBytes()!,
-            0,
-            file,
-          );
-          alert("图片已准备替换，导出时将生效");
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const newUrl = e.target?.result as string;
+            if (editorInstance.current) {
+              const images = editorInstance.current.getAllImages();
+              if (images.length > 0) {
+                editorInstance.current.replaceImage(images[0], newUrl);
+              } else {
+                editorInstance.current.insertImage(newUrl);
+              }
+            }
+          };
+          reader.readAsDataURL(file);
         } catch (error) {
           console.error("Image replacement error:", error);
           onError?.(error);
@@ -189,26 +238,24 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
     try {
       setIsProcessing(true);
       const content = editorInstance.current.getContent();
-      const pdfBytes = await pdfModifierRef.current!.exportToPDF(content);
-
-      const blob = new Blob([new Uint8Array(pdfBytes)], {
-        type: "application/pdf",
+      const pdfBytes = await pdfModifierRef.current!.exportToPDF(content, [], {
+        ...exportOptions,
+        fileName: exportFileName,
       });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `edited-document-${Date.now()}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
 
-      onPdfExported?.(pdfBytes.buffer as ArrayBuffer);
+      PDFModifier.downloadPDF(
+        pdfBytes,
+        `${exportFileName}-${Date.now()}.pdf`,
+      );
+
+      onPdfExported?.(pdfBytes);
     } catch (error) {
       console.error("Export error:", error);
       onError?.(error);
     } finally {
       setIsProcessing(false);
     }
-  }, [hasContent, onPdfExported, onError]);
+  }, [hasContent, exportFileName, exportOptions, onPdfExported, onError]);
 
   const clearFile = useCallback(() => {
     setFileName("");
@@ -220,7 +267,7 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
   }, []);
 
   return (
-    <div className="pdf-editor-wrapper">
+    <div className="pdf-editor-wrapper" style={wrapperStyle}>
       <div className="editor-header">
         <h3 className="editor-title">文档编辑</h3>
         <div className="header-actions">
@@ -269,8 +316,8 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
         )}
       </div>
 
-      <div className="editor-container">
-        <div ref={editorRef} className="rich-text-editor"></div>
+      <div className="editor-container" style={containerStyle}>
+        <div ref={editorRef} className="rich-text-editor" style={innerStyle}></div>
       </div>
 
       {watermarks.length > 0 && (
@@ -323,202 +370,34 @@ const PdfEditor: React.FC<PdfEditorProps> = ({
           border: 1px solid rgba(0, 217, 255, 0.2);
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-
-        .editor-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-          padding-bottom: 15px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .editor-title {
-          color: #00d9ff;
-          font-size: 18px;
-          font-weight: 600;
-          margin: 0;
-        }
-
-        .header-actions {
-          display: flex;
-          gap: 10px;
-        }
-
-        .action-btn {
-          padding: 8px 16px;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.3s ease;
-          font-size: 14px;
-        }
-
-        .watermark-btn {
-          background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-          color: white;
-        }
-
-        .watermark-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
-        }
-
-        .export-btn {
-          background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
-          color: #1a1a2e;
-        }
-
-        .export-btn:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 217, 255, 0.4);
-        }
-
-        .action-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .toolbar-section {
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          margin-bottom: 15px;
-        }
-
-        .upload-btn {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 20px;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          font-weight: 500;
-          transition: all 0.3s ease;
-          font-size: 14px;
-        }
-
-        .upload-btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-        }
-
-        .icon {
-          font-size: 18px;
-        }
-
-        .file-info {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          background: rgba(0, 217, 255, 0.1);
-          border-radius: 6px;
-          color: #00d9ff;
-          font-size: 14px;
-        }
-
-        .clear-btn {
-          background: none;
-          border: none;
-          color: #ff6b6b;
-          cursor: pointer;
-          font-size: 20px;
-          line-height: 1;
-          padding: 0 4px;
-        }
-
-        .clear-btn:hover {
-          color: #ff0000;
-        }
-
-        .editor-container {
-          background: #16213e;
-          border-radius: 8px;
-          overflow: hidden;
-          margin-bottom: 15px;
-        }
-
-        .rich-text-editor {
-          min-height: 400px;
-        }
-
-        .watermark-panel {
-          background: rgba(240, 147, 251, 0.1);
-          border: 1px solid rgba(240, 147, 251, 0.3);
-          border-radius: 8px;
-          padding: 15px;
-          margin-bottom: 15px;
-        }
-
-        .watermark-panel h4 {
-          color: #f093fb;
-          margin: 0 0 10px 0;
-          font-size: 14px;
-        }
-
-        .watermark-panel ul {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-
-        .watermark-panel li {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px 0;
-          color: #eee;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .remove-wm-btn {
-          padding: 4px 12px;
-          background: #f5576c;
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 12px;
-          transition: all 0.2s ease;
-        }
-
-        .remove-wm-btn:hover {
-          background: #ff0000;
-        }
-
-        .image-replace-section {
-          background: rgba(0, 217, 255, 0.1);
-          border: 1px solid rgba(0, 217, 255, 0.3);
-          border-radius: 8px;
-          padding: 15px;
-        }
-
-        .image-replace-section h4 {
-          color: #00d9ff;
-          margin: 0 0 10px 0;
-          font-size: 14px;
-        }
-
-        .replace-image-btn {
-          padding: 8px 16px;
-          background: transparent;
-          color: #00d9ff;
-          border: 1px solid #00d9ff;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          font-size: 14px;
-        }
-
-        .replace-image-btn:hover {
-          background: #00d9ff;
-          color: #1a1a2e;
-        }
+        .editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .editor-title { color: #00d9ff; font-size: 18px; font-weight: 600; margin: 0; }
+        .header-actions { display: flex; gap: 10px; }
+        .action-btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 14px; }
+        .watermark-btn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .watermark-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(245,87,108,0.4); }
+        .export-btn { background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%); color: #1a1a2e; }
+        .export-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,217,255,0.4); }
+        .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .toolbar-section { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+        .upload-btn { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 14px; }
+        .upload-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+        .icon { font-size: 18px; }
+        .file-info { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(0,217,255,0.1); border-radius: 6px; color: #00d9ff; font-size: 14px; }
+        .clear-btn { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 20px; line-height: 1; padding: 0 4px; }
+        .clear-btn:hover { color: #ff0000; }
+        .editor-container { background: #16213e; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+        .rich-text-editor { min-height: 400px; }
+        .watermark-panel { background: rgba(240,147,251,0.1); border: 1px solid rgba(240,147,251,0.3); border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+        .watermark-panel h4 { color: #f093fb; margin: 0 0 10px 0; font-size: 14px; }
+        .watermark-panel ul { list-style: none; padding: 0; margin: 0; }
+        .watermark-panel li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: #eee; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .remove-wm-btn { padding: 4px 12px; background: #f5576c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s ease; }
+        .remove-wm-btn:hover { background: #ff0000; }
+        .image-replace-section { background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 8px; padding: 15px; }
+        .image-replace-section h4 { color: #00d9ff; margin: 0 0 10px 0; font-size: 14px; }
+        .replace-image-btn { padding: 8px 16px; background: transparent; color: #00d9ff; border: 1px solid #00d9ff; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; font-size: 14px; }
+        .replace-image-btn:hover { background: #00d9ff; color: #1a1a2e; }
       `}</style>
     </div>
   );

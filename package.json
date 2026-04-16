@@ -5,12 +5,30 @@
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./vue3": {
+      "import": "./src/components/vue/PdfEditor.vue",
+      "types": "./src/components/vue/PdfEditor.vue"
+    },
+    "./vue2": {
+      "import": "./src/components/vue/PdfEditorVue2.vue",
+      "types": "./src/components/vue/PdfEditorVue2.vue"
+    },
+    "./dist/style.css": "./dist/style.css"
+  },
   "files": [
-    "dist"
+    "dist",
+    "src/components/vue"
   ],
   "scripts": {
     "build": "rollup -c",
-    "dev": "rollup -c -w"
+    "dev": "rollup -c -w",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "pdf",
@@ -20,12 +38,31 @@
     "rich-text",
     "watermark"
   ],
-  "author": "",
+  "author": "JGhammer",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JGhammer/pdf-editor-plugin.git"
+  },
+  "homepage": "https://github.com/JGhammer/pdf-editor-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/JGhammer/pdf-editor-plugin/issues"
+  },
   "peerDependencies": {
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "vue": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    },
+    "vue": {
+      "optional": true
+    }
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",
@@ -45,5 +82,9 @@
     "rollup-plugin-vue": "^6.0.0",
     "typescript": "^5.0.0",
     "vue": "^3.4.0"
-  }
+  },
+  "sideEffects": [
+    "**/*.css",
+    "**/*.vue"
+  ]
 }

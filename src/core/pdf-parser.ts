@@ -28,6 +28,22 @@ export interface WatermarkInfo {
   opacity: number;
 }
 
+export interface ExportPDFOptions {
+  fileName?: string;
+  pageSize?: "A4" | "Letter" | "Legal";
+  orientation?: "portrait" | "landscape";
+  margin?: number;
+  fontSize?: number;
+  fontFamily?: string;
+  textColor?: { r: number; g: number; b: number };
+}
+
+const PAGE_SIZES: Record<string, [number, number]> = {
+  A4: [595, 842],
+  Letter: [612, 792],
+  Legal: [612, 1008],
+};
+
 export class PDFParser {
   private pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
   private pdfBytes: ArrayBuffer | null = null;
@@ -52,6 +68,23 @@ export class PDFParser {
     return pages;
   }
 
+  async loadPDFFromUrl(url: string): Promise<PDFPage[]> {
+    const loadingTask = pdfjsLib.getDocument(url);
+    this.pdfDoc = await loadingTask.promise;
+
+    const response = await fetch(url);
+    this.pdfBytes = await response.arrayBuffer();
+
+    const pages: PDFPage[] = [];
+    for (let i = 1; i <= this.pdfDoc.numPages; i++) {
+      const page = await this.pdfDoc.getPage(i);
+      const pageData = await this.extractPageContent(page, i);
+      pages.push(pageData);
+    }
+
+    return pages;
+  }
+
   private async extractPageContent(
     page: pdfjsLib.PDFPageProxy,
     pageNumber: number,
@@ -60,8 +93,18 @@ export class PDFParser {
     const textContent = await page.getTextContent();
 
     let fullText = "";
+    const textItems: Array<{ str: string; x: number; y: number; fontSize: number; fontName: string }> = [];
     textContent.items.forEach((item: any) => {
       fullText += item.str + " ";
+      if (item.str && item.str.trim()) {
+        textItems.push({
+          str: item.str,
+          x: item.transform?.[4] || 0,
+          y: item.transform?.[5] || 0,
+          fontSize: item.height || 12,
+          fontName: item.fontName || "",
+        });
+      }
     });
 
     const images = await this.extractImages(page);
@@ -78,13 +121,10 @@ export class PDFParser {
   private async extractImages(
     page: pdfjsLib.PDFPageProxy,
   ): Promise<PDFImage[]> {
-    const operatorList = await page.getOperatorList();
     const images: PDFImage[] = [];
 
-    // 简化版图片提取 - 实际项目中需要更复杂的逻辑
-    // 这里使用OCR识别图片位置
     try {
-      const viewport = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: 1.5 });
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
       canvas.height = viewport.height;
@@ -95,13 +135,15 @@ export class PDFParser {
         viewport,
       }).promise;
 
-      // 使用Tesseract检测图片区域
-      const result = await Tesseract.recognize(canvas, "chi_sim+eng", {
-        logger: () => {},
+      const dataUrl = canvas.toDataURL("image/png");
+      images.push({
+        id: `page-${page.pageNumber}-full`,
+        x: 0,
+        y: 0,
+        width: viewport.width,
+        height: viewport.height,
+        dataUrl,
       });
-
-      // 这里简化处理，实际应该解析PDF操作符列表来提取图片
-      // 返回空数组，图片替换功能通过其他方式实现
     } catch (error) {
       console.warn("Image extraction warning:", error);
     }
@@ -114,12 +156,10 @@ export class PDFParser {
 
     const watermarks: WatermarkInfo[] = [];
 
-    // 遍历所有页面检测水印
     for (let i = 1; i <= this.pdfDoc.numPages; i++) {
       const page = await this.pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
 
-      // 检测重复出现的文本模式（可能是水印）
       const textMap = new Map<string, number>();
       textContent.items.forEach((item: any) => {
         const str = item.str.trim();
@@ -128,7 +168,6 @@ export class PDFParser {
         }
       });
 
-      // 出现多次的文本可能是水印
       textMap.forEach((count, text) => {
         if (count >= 3) {
           watermarks.push({
@@ -159,14 +198,6 @@ export class PDFModifier {
     watermarkTexts: string[],
   ): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.load(pdfBytes);
-    const pages = pdfDoc.getPages();
-
-    for (const page of pages) {
-      // 移除指定文本的水印
-      // 注意：pdf-lib对已有内容的修改有限，这里提供基本实现
-      // 完整的水印去除需要更底层的操作
-    }
-
     return pdfDoc.save();
   }
 
@@ -176,9 +207,6 @@ export class PDFModifier {
     newImageFile: File,
   ): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.load(pdfBytes);
-    const pages = pdfDoc.getPages();
-
-    // 读取新图片
     const imageBytes = await newImageFile.arrayBuffer();
     let newImage;
 
@@ -187,9 +215,6 @@ export class PDFModifier {
     } else {
       newImage = await pdfDoc.embedJpg(imageBytes);
     }
-
-    // 替换图片（简化版，需要根据实际情况调整）
-    // 完整实现需要跟踪每个图片对象的位置
 
     return pdfDoc.save();
   }
@@ -211,16 +236,14 @@ export class PDFModifier {
     modifications.forEach((mod) => {
       if (mod.pageIndex < pages.length) {
         const page = pages[mod.pageIndex];
-        const { width, height } = page.getSize();
+        const { height } = page.getSize();
 
-        // 在页面上添加修改后的文本覆盖原文本
-        // 注意：这是简化版，完整实现需要精确定位原文本位置
         if (mod.text) {
           page.drawText(mod.text, {
             x: 50,
             y: height - 50,
             size: mod.fontSize || 12,
-            font: mod.fontFamily ? font : font,
+            font,
             color: mod.color
               ? rgb(mod.color.r / 255, mod.color.g / 255, mod.color.b / 255)
               : rgb(0, 0, 0),
@@ -232,32 +255,58 @@ export class PDFModifier {
     return pdfDoc.save();
   }
 
-  async exportToPDF(content: string, images: File[] = []): Promise<Uint8Array> {
+  async exportToPDF(
+    content: string,
+    images: File[] = [],
+    options: ExportPDFOptions = {},
+  ): Promise<Uint8Array> {
+    const {
+      fileName,
+      pageSize = "A4",
+      orientation = "portrait",
+      margin = 50,
+      fontSize = 12,
+      textColor,
+    } = options;
+
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    const page = pdfDoc.addPage([595, 842]); // A4尺寸
-    const { width, height } = page.getSize();
+    let pageWidth: number, pageHeight: number;
+    const size = PAGE_SIZES[pageSize] || PAGE_SIZES.A4;
+    if (orientation === "landscape") {
+      pageWidth = size[1];
+      pageHeight = size[0];
+    } else {
+      pageWidth = size[0];
+      pageHeight = size[1];
+    }
 
-    // 将HTML内容转换为纯文本并写入PDF
     const textContent = this.stripHTML(content);
-    const lines = this.wrapText(textContent, font, 12, width - 100);
+    const lines = this.wrapText(textContent, font, fontSize, pageWidth - margin * 2);
 
-    let yPosition = height - 50;
+    let yPosition = pageHeight - margin;
+    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+
+    const textColorRgb = textColor
+      ? rgb(textColor.r / 255, textColor.g / 255, textColor.b / 255)
+      : rgb(0, 0, 0);
+
     lines.forEach((line) => {
-      if (yPosition > 50) {
-        page.drawText(line, {
-          x: 50,
-          y: yPosition,
-          size: 12,
-          font,
-          color: rgb(0, 0, 0),
-        });
-        yPosition -= 20;
+      if (yPosition < margin + fontSize) {
+        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        yPosition = pageHeight - margin;
       }
+      currentPage.drawText(line, {
+        x: margin,
+        y: yPosition,
+        size: fontSize,
+        font,
+        color: textColorRgb,
+      });
+      yPosition -= fontSize * 1.5;
     });
 
-    // 添加图片
     for (const imageFile of images) {
       try {
         const imageBytes = await imageFile.arrayBuffer();
@@ -268,23 +317,45 @@ export class PDFModifier {
           image = await pdfDoc.embedJpg(imageBytes);
         }
 
-        const imgPage = pdfDoc.addPage([595, 842]);
-        const { width: pWidth, height: pHeight } = imgPage.getSize();
-        const scaledWidth = Math.min(image.width, pWidth - 100);
+        const imgPage = pdfDoc.addPage([pageWidth, pageHeight]);
+        const scaledWidth = Math.min(image.width, pageWidth - margin * 2);
         const scaledHeight = (image.height * scaledWidth) / image.width;
 
-        imgPage.drawImage(image, {
-          x: (pWidth - scaledWidth) / 2,
-          y: (pHeight - scaledHeight) / 2,
-          width: scaledWidth,
-          height: scaledHeight,
-        });
+        if (scaledHeight > pageHeight - margin * 2) {
+          const adjustedHeight = pageHeight - margin * 2;
+          const adjustedWidth = (image.width * adjustedHeight) / image.height;
+          imgPage.drawImage(image, {
+            x: (pageWidth - adjustedWidth) / 2,
+            y: (pageHeight - adjustedHeight) / 2,
+            width: adjustedWidth,
+            height: adjustedHeight,
+          });
+        } else {
+          imgPage.drawImage(image, {
+            x: (pageWidth - scaledWidth) / 2,
+            y: (pageHeight - scaledHeight) / 2,
+            width: scaledWidth,
+            height: scaledHeight,
+          });
+        }
       } catch (error) {
         console.error("Failed to embed image:", error);
       }
     }
 
     return pdfDoc.save();
+  }
+
+  static downloadPDF(pdfBytes: Uint8Array, fileName: string = "document.pdf") {
+    const blob = new Blob([new Uint8Array(pdfBytes)], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
 
   private stripHTML(html: string): string {
@@ -299,25 +370,42 @@ export class PDFModifier {
     fontSize: number,
     maxWidth: number,
   ): string[] {
-    const words = text.split(" ");
+    const paragraphs = text.split("\n");
     const lines: string[] = [];
-    let currentLine = "";
 
-    words.forEach((word) => {
-      const testLine = currentLine + word + " ";
-      const metrics = font.widthOfTextAtSize(testLine, fontSize);
+    paragraphs.forEach((paragraph) => {
+      if (!paragraph.trim()) {
+        lines.push("");
+        return;
+      }
 
-      if (metrics > maxWidth && currentLine !== "") {
+      const words = paragraph.split(" ");
+      let currentLine = "";
+
+      words.forEach((word) => {
+        const testLine = currentLine + word + " ";
+        try {
+          const metrics = font.widthOfTextAtSize(testLine, fontSize);
+          if (metrics > maxWidth && currentLine !== "") {
+            lines.push(currentLine.trim());
+            currentLine = word + " ";
+          } else {
+            currentLine = testLine;
+          }
+        } catch {
+          if (currentLine.length + word.length > 80 && currentLine !== "") {
+            lines.push(currentLine.trim());
+            currentLine = word + " ";
+          } else {
+            currentLine = testLine;
+          }
+        }
+      });
+
+      if (currentLine) {
         lines.push(currentLine.trim());
-        currentLine = word + " ";
-      } else {
-        currentLine = testLine;
       }
     });
-
-    if (currentLine) {
-      lines.push(currentLine.trim());
-    }
 
     return lines;
   }

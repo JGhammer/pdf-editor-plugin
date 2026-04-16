@@ -1,5 +1,5 @@
 <template>
-  <div class="pdf-editor-wrapper">
+  <div class="pdf-editor-wrapper" :style="wrapperStyle">
     <div class="editor-header">
       <h3 class="editor-title">文档编辑</h3>
       <div class="header-actions">
@@ -40,8 +40,8 @@
       </div>
     </div>
 
-    <div class="editor-container">
-      <div ref="editorRef" class="rich-text-editor"></div>
+    <div class="editor-container" :style="editorContainerStyle">
+      <div ref="editorRef" class="rich-text-editor" :style="editorInnerStyle"></div>
     </div>
 
     <div v-if="watermarks.length > 0" class="watermark-panel">
@@ -86,6 +86,18 @@ export default {
     initialContent: {
       type: String,
       default: ''
+    },
+    editorStyle: {
+      type: Object,
+      default: () => ({})
+    },
+    exportFileName: {
+      type: String,
+      default: 'edited-document'
+    },
+    exportOptions: {
+      type: Object,
+      default: () => ({})
     }
   },
 
@@ -102,6 +114,36 @@ export default {
     }
   },
 
+  computed: {
+    wrapperStyle() {
+      var s = this.editorStyle
+      return {
+        width: s.width || undefined,
+        background: s.background || undefined
+      }
+    },
+    editorContainerStyle() {
+      var s = this.editorStyle
+      return {
+        height: s.height || undefined,
+        minHeight: s.minHeight || undefined,
+        background: s.background || undefined,
+        borderRadius: s.borderRadius || undefined
+      }
+    },
+    editorInnerStyle() {
+      var s = this.editorStyle
+      return {
+        height: s.height || undefined,
+        minHeight: s.minHeight || undefined,
+        padding: s.padding || undefined,
+        fontSize: s.fontSize || undefined,
+        fontFamily: s.fontFamily || undefined,
+        color: s.textColor || undefined
+      }
+    }
+  },
+
   mounted() {
     this.initEditor()
   },
@@ -114,20 +156,22 @@ export default {
 
   methods: {
     async initEditor() {
-      const { RichTextEditor } = await import('../core/rich-text-editor')
-      const { PDFParser, PDFModifier } = await import('../core/pdf-parser')
+      var RichTextEditor = (await import('../core/rich-text-editor')).RichTextEditor
+      var PDFParser = (await import('../core/pdf-parser')).PDFParser
+      var PDFModifier = (await import('../core/pdf-parser')).PDFModifier
 
       if (this.$refs.editorRef) {
         this.editor = new RichTextEditor(this.$refs.editorRef, {
           placeholder: this.placeholder,
           readOnly: this.readOnly,
+          style: this.editorStyle,
           onContentChange: (html, delta) => {
             this.hasContent = !!html && html !== '<p><br></p>'
             this.$emit('content-change', { html, delta })
           },
           onImageUpload: async (file) => {
             return new Promise((resolve) => {
-              const reader = new FileReader()
+              var reader = new FileReader()
               reader.onload = (e) => resolve(e.target.result)
               reader.readAsDataURL(file)
             })
@@ -153,34 +197,39 @@ export default {
     },
 
     async handleFileUpload(event) {
-      const file = event.target.files[0]
+      var file = event.target.files[0]
       
       if (file && file.type === 'application/pdf') {
         try {
           this.fileName = file.name
           this.isProcessing = true
           
-          const pages = await this.pdfParser.loadPDF(file)
+          var pages = await this.pdfParser.loadPDF(file)
           this.hasPDF = true
           
-          let fullContent = ''
+          var fullContent = ''
           pages.forEach((page, index) => {
             if (index > 0) fullContent += '<br/><br/>'
-            fullContent += `<h2>第 ${page.pageNumber} 页</h2>`
-            fullContent += `<p>${page.textContent}</p>`
+            fullContent += '<h2>第 ' + page.pageNumber + ' 页</h2>'
+            fullContent += '<p>' + page.textContent + '</p>'
+            if (page.images.length > 0) {
+              page.images.forEach(function(img) {
+                fullContent += '<p><img src="' + img.dataUrl + '" style="max-width:100%;" /></p>'
+              })
+            }
           })
           
-          this.$nextTick(() => {
+          this.$nextTick(function() {
             if (this.editor) {
               this.editor.setContent(fullContent)
               this.hasContent = true
             }
-          })
+          }.bind(this))
           
-          const detectedWatermarks = await this.pdfParser.detectWatermarks()
+          var detectedWatermarks = await this.pdfParser.detectWatermarks()
           this.watermarks = detectedWatermarks
           
-          this.$emit('pdf-loaded', { pages, watermarks: detectedWatermarks })
+          this.$emit('pdf-loaded', { pages: pages, watermarks: detectedWatermarks })
         } catch (error) {
           console.error('PDF loading error:', error)
           this.$emit('error', error)
@@ -191,17 +240,25 @@ export default {
     },
 
     async handleImageReplace(event) {
-      const file = event.target.files[0]
+      var file = event.target.files[0]
       
-      if (file && this.pdfParser.getPDFBytes()) {
+      if (file) {
         try {
           this.isProcessing = true
-          await this.pdfModifier.replaceImage(
-            this.pdfParser.getPDFBytes(),
-            0,
-            file
-          )
-          alert('图片已准备替换，导出时将生效')
+          var self = this
+          var reader = new FileReader()
+          reader.onload = function(e) {
+            var newUrl = e.target.result
+            if (self.editor) {
+              var images = self.editor.getAllImages()
+              if (images.length > 0) {
+                self.editor.replaceImage(images[0], newUrl)
+              } else {
+                self.editor.insertImage(newUrl)
+              }
+            }
+          }
+          reader.readAsDataURL(file)
         } catch (error) {
           console.error('Image replacement error:', error)
           this.$emit('error', error)
@@ -216,7 +273,7 @@ export default {
       
       try {
         this.isProcessing = true
-        const watermarkTexts = this.watermarks.map(wm => wm.content)
+        var watermarkTexts = this.watermarks.map(function(wm) { return wm.content })
         await this.pdfModifier.removeWatermark(this.pdfParser.getPDFBytes(), watermarkTexts)
         this.watermarks = []
         alert('水印已移除，将在导出时生效')
@@ -229,7 +286,7 @@ export default {
     },
 
     async removeSpecificWatermark(index) {
-      const wm = this.watermarks[index]
+      var wm = this.watermarks[index]
       if (!this.pdfParser.getPDFBytes()) return
       
       try {
@@ -249,16 +306,14 @@ export default {
       
       try {
         this.isProcessing = true
-        const content = this.editor.getContent()
-        const pdfBytes = await this.pdfModifier.exportToPDF(content)
+        var content = this.editor.getContent()
+        var PDFModifier = (await import('../core/pdf-parser')).PDFModifier
+        var pdfBytes = await this.pdfModifier.exportToPDF(content, [], {
+          ...this.exportOptions,
+          fileName: this.exportFileName
+        })
         
-        const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `edited-document-${Date.now()}.pdf`
-        a.click()
-        URL.revokeObjectURL(url)
+        PDFModifier.downloadPDF(pdfBytes, this.exportFileName + '-' + Date.now() + '.pdf')
         
         this.$emit('pdf-exported', pdfBytes)
       } catch (error) {
@@ -296,198 +351,32 @@ export default {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(0, 217, 255, 0.2);
 }
-
-.editor-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.editor-title {
-  color: #00d9ff;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.action-btn {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  font-size: 14px;
-}
-
-.watermark-btn {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-  color: white;
-}
-
-.watermark-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
-}
-
-.export-btn {
-  background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
-  color: #1a1a2e;
-}
-
-.export-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 217, 255, 0.4);
-}
-
-.action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toolbar-section {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.upload-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.upload-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
-}
-
-.icon {
-  font-size: 18px;
-}
-
-.file-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(0, 217, 255, 0.1);
-  border-radius: 6px;
-  color: #00d9ff;
-  font-size: 14px;
-}
-
-.clear-btn {
-  background: none;
-  border: none;
-  color: #ff6b6b;
-  cursor: pointer;
-  font-size: 20px;
-  line-height: 1;
-  padding: 0 4px;
-}
-
-.clear-btn:hover {
-  color: #ff0000;
-}
-
-.editor-container {
-  background: #16213e;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 15px;
-}
-
-.rich-text-editor {
-  min-height: 400px;
-}
-
-.watermark-panel {
-  background: rgba(240, 147, 251, 0.1);
-  border: 1px solid rgba(240, 147, 251, 0.3);
-  border-radius: 8px;
-  padding: 15px;
-  margin-bottom: 15px;
-}
-
-.watermark-panel h4 {
-  color: #f093fb;
-  margin: 0 0 10px 0;
-  font-size: 14px;
-}
-
-.watermark-panel ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.watermark-panel li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  color: #eee;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.remove-wm-btn {
-  padding: 4px 12px;
-  background: #f5576c;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: all 0.2s ease;
-}
-
-.remove-wm-btn:hover {
-  background: #ff0000;
-}
-
-.image-replace-section {
-  background: rgba(0, 217, 255, 0.1);
-  border: 1px solid rgba(0, 217, 255, 0.3);
-  border-radius: 8px;
-  padding: 15px;
-}
-
-.image-replace-section h4 {
-  color: #00d9ff;
-  margin: 0 0 10px 0;
-  font-size: 14px;
-}
-
-.replace-image-btn {
-  padding: 8px 16px;
-  background: transparent;
-  color: #00d9ff;
-  border: 1px solid #00d9ff;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.replace-image-btn:hover {
-  background: #00d9ff;
-  color: #1a1a2e;
-}
+.editor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.editor-title { color: #00d9ff; font-size: 18px; font-weight: 600; margin: 0; }
+.header-actions { display: flex; gap: 10px; }
+.action-btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; font-size: 14px; }
+.watermark-btn { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+.watermark-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(245,87,108,0.4); }
+.export-btn { background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%); color: #1a1a2e; }
+.export-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,217,255,0.4); }
+.action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.toolbar-section { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
+.upload-btn { display: flex; align-items: center; gap: 8px; padding: 10px 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; transition: all 0.3s ease; }
+.upload-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+.icon { font-size: 18px; }
+.file-info { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(0,217,255,0.1); border-radius: 6px; color: #00d9ff; font-size: 14px; }
+.clear-btn { background: none; border: none; color: #ff6b6b; cursor: pointer; font-size: 20px; line-height: 1; padding: 0 4px; }
+.clear-btn:hover { color: #ff0000; }
+.editor-container { background: #16213e; border-radius: 8px; overflow: hidden; margin-bottom: 15px; }
+.rich-text-editor { min-height: 400px; }
+.watermark-panel { background: rgba(240,147,251,0.1); border: 1px solid rgba(240,147,251,0.3); border-radius: 8px; padding: 15px; margin-bottom: 15px; }
+.watermark-panel h4 { color: #f093fb; margin: 0 0 10px 0; font-size: 14px; }
+.watermark-panel ul { list-style: none; padding: 0; margin: 0; }
+.watermark-panel li { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; color: #eee; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.remove-wm-btn { padding: 4px 12px; background: #f5576c; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s ease; }
+.remove-wm-btn:hover { background: #ff0000; }
+.image-replace-section { background: rgba(0,217,255,0.1); border: 1px solid rgba(0,217,255,0.3); border-radius: 8px; padding: 15px; }
+.image-replace-section h4 { color: #00d9ff; margin: 0 0 10px 0; font-size: 14px; }
+.replace-image-btn { padding: 8px 16px; background: transparent; color: #00d9ff; border: 1px solid #00d9ff; border-radius: 6px; cursor: pointer; transition: all 0.3s ease; }
+.replace-image-btn:hover { background: #00d9ff; color: #1a1a2e; }
 </style>

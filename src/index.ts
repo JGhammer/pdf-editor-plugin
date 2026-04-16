@@ -6,9 +6,19 @@ export { PDFParser, PDFModifier } from "./core/pdf-parser";
 export { RichTextEditor } from "./core/rich-text-editor";
 
 // 类型导出
-export type { PDFPage, PDFImage, WatermarkInfo } from "./core/pdf-parser";
+export type {
+  PDFPage,
+  PDFImage,
+  WatermarkInfo,
+  ExportPDFOptions,
+} from "./core/pdf-parser";
 
-export type { EditorConfig, FontStyle } from "./core/rich-text-editor";
+export type {
+  EditorConfig,
+  EditorStyle,
+  FontStyle,
+} from "./core/rich-text-editor";
 
-// Vue组件需要单独引入（由于构建工具限制）
-// 使用方式: import PdfEditorVue from 'pdf-editor-plugin/dist/vue/PdfEditor.vue'
+// 默认导出（React 组件）
+import PdfEditorReact from "./components/react/PdfEditor";
+export default PdfEditorReact;

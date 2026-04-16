@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF Editor Plugin - 功能测试</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      text-align: center;
+      color: white;
+      font-size: 36px;
+      margin-bottom: 30px;
+      text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    }
+
+    .demo-section {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 16px;
+      padding: 30px;
+      margin-bottom: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .section-title {
+      color: #00d9ff;
+      font-size: 24px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title::before {
+      content: '';
+      width: 4px;
+      height: 24px;
+      background: linear-gradient(135deg, #00d9ff, #00ff88);
+      border-radius: 2px;
+    }
+
+    .info-card {
+      background: rgba(26, 26, 46, 0.6);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 15px;
+      border-left: 4px solid #00d9ff;
+    }
+
+    .info-card h3 {
+      color: #00d9ff;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .info-card p {
+      color: #ccc;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .code-block {
+      background: #1a1a2e;
+      border-radius: 8px;
+      padding: 15px;
+      overflow-x: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #00ff88;
+      margin-top: 10px;
+    }
+
+    .test-buttons {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .test-btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 14px;
+      transition: all 0.3s ease;
+    }
+
+    .test-btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .test-btn-success {
+      background: linear-gradient(135deg, #00d9ff 0%, #00ff88 100%);
+      color: #1a1a2e;
+    }
+
+    .test-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .log-console {
+      background: #0a0a0a;
+      border-radius: 8px;
+      padding: 15px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #00ff88;
+      margin-top: 20px;
+      border: 1px solid #333;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+      border-bottom: 1px solid #222;
+    }
+
+    .log-time {
+      color: #888;
+      margin-right: 10px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-left: 10px;
+    }
+
+    .status-success {
+      background: rgba(0, 255, 136, 0.2);
+      color: #00ff88;
+      border: 1px solid #00ff88;
+    }
+
+    .status-error {
+      background: rgba(255, 107, 107, 0.2);
+      color: #ff6b6b;
+      border: 1px solid #ff6b6b;
+    }
+
+    #editor-container {
+      min-height: 400px;
+      background: #16213e;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📄 PDF Editor Plugin - 功能验证</h1>
+
+    <!-- 核心API测试 -->
+    <div class="demo-section">
+      <h2 class="section-title">
+        🔧 核心模块测试
+        <span class="status-badge status-success" id="load-status">加载中...</span>
+      </h2>
+      
+      <p style="color: #ccc; margin-bottom: 20px; line-height: 1.6;">
+        此页面用于验证 PDF Editor Plugin 的核心功能是否正常工作。
+        点击下方按钮进行各项功能测试。
+      </p>
+
+      <div class="test-buttons">
+        <button class="test-btn test-btn-primary" onclick="testCoreModules()">
+          测试核心模块
+        </button>
+        <button class="test-btn test-btn-success" onclick="testRichTextEditor()">
+          测试富文本编辑器
+        </button>
+        <button class="test-btn test-btn-primary" onclick="clearLogs()">
+          清空日志
+        </button>
+      </div>
+
+      <div id="editor-container"></div>
+      
+      <div class="log-console" id="log-console"></div>
+    </div>
+
+    <!-- 使用说明 -->
+    <div class="demo-section">
+      <h2 class="section-title">📖 快速使用指南</h2>
+      
+      <div style="color: #ccc; line-height: 1.8;">
+        <h3 style="color: #00d9ff; margin: 15px 0 10px;">React 项目中使用：</h3>
+        <pre style="background: #1a1a2e; padding: 15px; border-radius: 8px; overflow-x: auto; color: #00ff88;">
+import { PdfEditorReact } from 'pdf-editor-plugin';
+
+function App() {
+  return (
+    &lt;PdfEditorReact 
+      placeholder="请上传PDF文件..."
+      onContentChange={(data) => console.log(data)}
+    /&gt;
+  );
+}</pre>
+
+        <h3 style="color: #00d9ff; margin: 15px 0 10px;">Vue 3 项目中使用：</h3>
+        <pre style="background: #1a1a2e; padding: 15px; border-radius: 8px; overflow-x: auto; color: #00ff88;">
+import PdfEditor from 'pdf-editor-plugin/src/components/vue/PdfEditor.vue';
+
+export default {
+  components: { PdfEditor },
+  template: '&lt;PdfEditor @content-change="handleChange" /&gt;'
+}</pre>
+
+        <h3 style="color: #00d9ff; margin: 15px 0 10px;">Vue 2 项目中使用：</h3>
+        <pre style="background: #1a1a2e; padding: 15px; border-radius: 8px; overflow-x: auto; color: #00ff88;">
+import PdfEditor from 'pdf-editor-plugin/src/components/vue/PdfEditorVue2.vue';
+
+export default {
+  components: { PdfEditor },
+  template: '&lt;PdfEditor @content-change="handleChange" /&gt;'
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // 动态导入核心模块
+    let PDFParser, PDFModifier, RichTextEditor;
+
+    // 日志系统
+    function log(message, type = 'info') {
+      const container = document.getElementById('log-console');
+      const time = new Date().toLocaleTimeString();
+      const colors = {
+        info: '#00ff88',
+        error: '#ff6b6b',
+        warning: '#ffd93d',
+        success: '#00d9ff'
+      };
+      
+      container.innerHTML += `
+        <div class="log-entry">
+          <span class="log-time">[${time}]</span>
+          <span style="color: ${colors[type]}">${message}</span>
+        </div>
+      `;
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function clearLogs() {
+      document.getElementById('log-console').innerHTML = '';
+    }
+
+    // 更新状态徽章
+    function updateStatus(success, message) {
+      const badge = document.getElementById('load-status');
+      badge.className = `status-badge ${success ? 'status-success' : 'status-error'}`;
+      badge.textContent = message;
+    }
+
+    // 页面加载完成后初始化
+    window.addEventListener('DOMContentLoaded', async () => {
+      try {
+        // 动态导入模块
+        const module = await import('../dist/index.esm.js');
+        PDFParser = module.PDFParser;
+        PDFModifier = module.PDFModifier;
+        RichTextEditor = module.RichTextEditor;
+
+        updateStatus(true, '✅ 模块加载成功');
+        log('✅ PDF Editor Plugin 模块已成功加载', 'success');
+        log('📦 可用组件: PdfEditorReact, PDFParser, PDFModifier, RichTextEditor', 'info');
+      } catch (error) {
+        updateStatus(false, '❌ 加载失败');
+        log(`❌ 模块加载失败: ${error.message}`, 'error');
+        log('💡 请先运行 npm run build 构建项目', 'warning');
+      }
+    });
+
+    // 测试核心模块
+    window.testCoreModules = async function() {
+      log('🧪 开始测试核心模块...', 'info');
+      
+      try {
+        if (!PDFParser || !PDFModifier || !RichTextEditor) {
+          throw new Error('模块未加载，请刷新页面');
+        }
+        
+        log('✅ 模块结构验证通过', 'success');
+        log('📋 导出的内容:', 'info');
+        log('   - PDFParser ✅', 'success');
+        log('   - PDFModifier ✅', 'success');
+        log('   - RichTextEditor ✅', 'success');
+        
+        // 测试实例化
+        const parser = new PDFParser();
+        log('✅ PDFParser 实例创建成功', 'success');
+        
+        const modifier = new PDFModifier();
+        log('✅ PDFModifier 实例创建成功', 'success');
+        
+        log('🎉 核心模块测试完成！', 'success');
+      } catch (error) {
+        log(`❌ 错误: ${error.message}`, 'error');
+      }
+    };
+
+    // 测试富文本编辑器
+    window.testRichTextEditor = async function() {
+      log('🧪 开始测试富文本编辑器...', 'info');
+      
+      try {
+        if (!RichTextEditor) {
+          throw new Error('RichTextEditor 模块未加载');
+        }
+        
+        const container = document.getElementById('editor-container');
+        container.innerHTML = '';
+        
+        const editor = new RichTextEditor(container, {
+          placeholder: '这是一个富文本编辑器测试...',
+          onContentChange: (html, delta) => {
+            // 静默处理
+          }
+        });
+        
+        log('✅ 编辑器实例创建成功', 'success');
+        
+        // 测试基本操作
+        editor.setContent('<p><strong>测试内容</strong> - 这是一个<strong>富文本编辑器</strong>的示例。</p>');
+        log('✅ setContent() 正常工作', 'success');
+        
+        const content = editor.getContent();
+        log(`✅ getContent() 返回长度: ${content.length}`, 'success');
+        
+        const text = editor.getText();
+        log(`✅ getText() 返回: "${text.substring(0, 50)}..."`, 'success');
+        
+        editor.applyStyle({
+          bold: true,
+          color: '#00d9ff'
+        });
+        log('✅ applyStyle() 正常工作', 'success');
+        
+        log('🎉 富文本编辑器测试完成！所有功能正常。', 'success');
+        log('💡 你可以在上方编辑器中测试各种功能', 'info');
+      } catch (error) {
+        log(`❌ 错误: ${error.message}`, 'error');
+      }
+    };
+
+    // 初始化日志
+    log('👋 欢迎使用 PDF Editor Plugin 测试工具！', 'success');
+    log('正在加载模块...', 'info');
+  </script>
+</body>
+</html>

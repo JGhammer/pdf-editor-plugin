@@ -11,18 +11,19 @@ export default {
     {
       file: 'dist/index.js',
       format: 'cjs',
-      exports: 'named'
+      exports: 'named',
+      sourcemap: true
     },
     {
       file: 'dist/index.esm.js',
       format: 'esm',
-      exports: 'named'
+      exports: 'named',
+      sourcemap: true
     }
   ],
   plugins: [
     postcss({
-      extract: false,
-      inject: true,
+      extract: 'style.css',
       minimize: true
     }),
     resolve(),

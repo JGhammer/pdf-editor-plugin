@@ -1,10 +1,24 @@
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
 
+export interface EditorStyle {
+  width?: string;
+  height?: string;
+  minHeight?: string;
+  background?: string;
+  borderColor?: string;
+  borderRadius?: string;
+  padding?: string;
+  fontSize?: string;
+  fontFamily?: string;
+  textColor?: string;
+}
+
 export interface EditorConfig {
   theme?: string;
   placeholder?: string;
   readOnly?: boolean;
+  style?: EditorStyle;
   modules?: {
     toolbar?: any;
     [key: string]: any;
@@ -29,6 +43,7 @@ export class RichTextEditor {
   private quill: Quill | null = null;
   private container: HTMLElement | null = null;
   private config: EditorConfig;
+  private styleEl: HTMLElement | null = null;
 
   constructor(container: HTMLElement | string, config: EditorConfig = {}) {
     this.container =
@@ -40,10 +55,13 @@ export class RichTextEditor {
       theme: "snow",
       placeholder: "请输入内容...",
       readOnly: false,
+      style: {},
       ...config,
     };
 
     this.initEditor();
+    this.applyContainerStyle();
+    this.applyDarkTheme();
   }
 
   private initEditor() {
@@ -71,7 +89,35 @@ export class RichTextEditor {
     });
 
     this.setupEventHandlers();
-    this.applyDarkTheme();
+  }
+
+  private applyContainerStyle() {
+    if (!this.container || !this.config.style) return;
+
+    const s = this.config.style;
+    const container = this.container as HTMLElement;
+
+    if (s.width) container.style.width = s.width;
+    if (s.height) container.style.height = s.height;
+    if (s.minHeight) container.style.minHeight = s.minHeight;
+    if (s.background) container.style.backgroundColor = s.background;
+    if (s.borderColor) container.style.borderColor = s.borderColor;
+    if (s.borderRadius) container.style.borderRadius = s.borderRadius;
+    if (s.padding) container.style.padding = s.padding;
+    if (s.fontSize) container.style.fontSize = s.fontSize;
+    if (s.fontFamily) container.style.fontFamily = s.fontFamily;
+    if (s.textColor) container.style.color = s.textColor;
+
+    const editorEl = container.querySelector(".ql-editor") as HTMLElement;
+    if (editorEl) {
+      if (s.minHeight) editorEl.style.minHeight = s.minHeight;
+      if (s.height) editorEl.style.height = s.height;
+      if (s.background) editorEl.style.backgroundColor = s.background;
+      if (s.fontSize) editorEl.style.fontSize = s.fontSize;
+      if (s.fontFamily) editorEl.style.fontFamily = s.fontFamily;
+      if (s.textColor) editorEl.style.color = s.textColor;
+      if (s.padding) editorEl.style.padding = s.padding;
+    }
   }
 
   private setupEventHandlers() {
@@ -85,7 +131,6 @@ export class RichTextEditor {
       }
     });
 
-    // 自定义图片上传处理
     const toolbar = this.quill.getModule("toolbar");
     if (toolbar) {
       toolbar.addHandler("image", () => this.handleImageInsert());
@@ -110,7 +155,6 @@ export class RichTextEditor {
           console.error("Image upload failed:", error);
         }
       } else if (file) {
-        // 默认处理：使用base64
         const reader = new FileReader();
         reader.onload = (event) => {
           const range = this.quill!.getSelection(true);
@@ -131,8 +175,12 @@ export class RichTextEditor {
   private applyDarkTheme() {
     if (!this.container) return;
 
-    const style = document.createElement("style");
-    style.textContent = `
+    if (this.styleEl) {
+      this.styleEl.remove();
+    }
+
+    this.styleEl = document.createElement("style");
+    this.styleEl.textContent = `
       .ql-container.ql-snow {
         border: 1px solid #1a1a2e !important;
         background-color: #16213e !important;
@@ -205,16 +253,15 @@ export class RichTextEditor {
         height: auto;
         border-radius: 4px;
         margin: 10px 0;
+        cursor: pointer;
+        transition: opacity 0.2s;
       }
       
-      body {
-        margin: 0;
-        padding: 20px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
+      .ql-editor img:hover {
+        opacity: 0.8;
       }
     `;
-    document.head.appendChild(style);
+    document.head.appendChild(this.styleEl);
   }
 
   setContent(html: string) {
@@ -237,8 +284,6 @@ export class RichTextEditor {
 
   applyStyle(style: FontStyle) {
     if (!this.quill) return;
-
-    const selection = this.quill.getSelection(true);
 
     if (style.bold !== undefined) {
       this.quill.format("bold", style.bold);
@@ -279,13 +324,18 @@ export class RichTextEditor {
   replaceImage(oldUrl: string, newUrl: string) {
     if (!this.quill) return;
 
-    const delta = this.quill.getContents();
-    delta.ops.forEach((op: any, index: number) => {
-      if (op.insert && op.insert.image === oldUrl) {
-        this.quill!.deleteText(index, 1);
-        this.quill!.insertEmbed(index, "image", newUrl, "user");
-      }
-    });
+    const content = this.quill.root.innerHTML;
+    const updatedContent = content.replace(
+      new RegExp(oldUrl.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+      newUrl,
+    );
+    this.quill.root.innerHTML = updatedContent;
+  }
+
+  getAllImages(): string[] {
+    if (!this.quill) return [];
+    const imgs = this.quill.root.querySelectorAll("img");
+    return Array.from(imgs).map((img) => img.getAttribute("src") || "");
   }
 
   findAndReplace(searchText: string, replaceText: string) {
@@ -320,7 +370,16 @@ export class RichTextEditor {
     }
   }
 
+  updateStyle(style: EditorStyle) {
+    this.config.style = { ...this.config.style, ...style };
+    this.applyContainerStyle();
+  }
+
   destroy() {
+    if (this.styleEl) {
+      this.styleEl.remove();
+      this.styleEl = null;
+    }
     if (this.quill) {
       this.quill = null;
     }

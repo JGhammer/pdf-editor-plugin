@@ -1,5 +1,5 @@
 <template>
-  <div class="pdf-editor-wrapper">
+  <div class="pdf-editor-wrapper" :style="wrapperStyle">
     <div class="editor-header">
       <h3 class="editor-title">文档编辑</h3>
       <div class="header-actions">
@@ -40,8 +40,8 @@
       </div>
     </div>
 
-    <div class="editor-container">
-      <div ref="editorRef" class="rich-text-editor"></div>
+    <div class="editor-container" :style="editorContainerStyle">
+      <div ref="editorRef" class="rich-text-editor" :style="editorInnerStyle"></div>
     </div>
 
     <div v-if="watermarks.length > 0" class="watermark-panel">
@@ -71,20 +71,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { PDFParser, PDFModifier, WatermarkInfo } from '../../core/pdf-parser'
-import { RichTextEditor, EditorConfig } from '../../core/rich-text-editor'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { PDFParser, PDFModifier, WatermarkInfo, ExportPDFOptions } from '../../core/pdf-parser'
+import { RichTextEditor, EditorConfig, EditorStyle } from '../../core/rich-text-editor'
 
 interface Props {
   placeholder?: string
   readOnly?: boolean
   initialContent?: string
+  editorStyle?: EditorStyle
+  exportFileName?: string
+  exportOptions?: ExportPDFOptions
 }
 
 const props = withDefaults(defineProps<Props>(), {
   placeholder: '请输入或粘贴PDF内容...',
   readOnly: false,
-  initialContent: ''
+  initialContent: '',
+  exportFileName: 'edited-document',
+  editorStyle: () => ({}),
+  exportOptions: () => ({})
 })
 
 const emit = defineEmits<{
@@ -107,6 +113,36 @@ let editor: RichTextEditor | null = null
 let pdfParser: PDFParser | null = null
 let pdfModifier: PDFModifier | null = null
 
+const wrapperStyle = computed(() => {
+  const s = props.editorStyle
+  return {
+    width: s.width || undefined,
+    background: s.background || undefined,
+  }
+})
+
+const editorContainerStyle = computed(() => {
+  const s = props.editorStyle
+  return {
+    height: s.height || undefined,
+    minHeight: s.minHeight || undefined,
+    background: s.background || undefined,
+    borderRadius: s.borderRadius || undefined,
+  }
+})
+
+const editorInnerStyle = computed(() => {
+  const s = props.editorStyle
+  return {
+    height: s.height || undefined,
+    minHeight: s.minHeight || undefined,
+    padding: s.padding || undefined,
+    fontSize: s.fontSize || undefined,
+    fontFamily: s.fontFamily || undefined,
+    color: s.textColor || undefined,
+  }
+})
+
 const triggerFileInput = () => {
   fileInput.value?.click()
 }
@@ -120,6 +156,7 @@ onMounted(() => {
     const config: EditorConfig = {
       placeholder: props.placeholder,
       readOnly: props.readOnly,
+      style: props.editorStyle,
       onContentChange: (html: string, delta: any) => {
         hasContent.value = !!html && html !== '<p><br></p>'
         emit('content-change', { html, delta })
@@ -168,6 +205,11 @@ const handleFileUpload = async (event: Event) => {
         if (index > 0) fullContent += '<br/><br/>'
         fullContent += `<h2>第 ${page.pageNumber} 页</h2>`
         fullContent += `<p>${page.textContent}</p>`
+        if (page.images.length > 0) {
+          page.images.forEach((img) => {
+            fullContent += `<p><img src="${img.dataUrl}" style="max-width:100%;" /></p>`
+          })
+        }
       })
       
       await nextTick()
@@ -191,15 +233,22 @@ const handleImageReplace = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
   
-  if (file && pdfParser?.getPDFBytes()) {
+  if (file) {
     try {
       isProcessing.value = true
-      await pdfModifier!.replaceImage(
-        pdfParser.getPDFBytes()!,
-        0,
-        file
-      )
-      alert('图片已准备替换，导出时将生效')
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        const newUrl = e.target?.result as string
+        if (editor) {
+          const images = editor.getAllImages()
+          if (images.length > 0) {
+            editor.replaceImage(images[0], newUrl)
+          } else {
+            editor.insertImage(newUrl)
+          }
+        }
+      }
+      reader.readAsDataURL(file)
     } catch (error) {
       console.error('Image replacement error:', error)
       emit('error', error)
@@ -248,15 +297,12 @@ const exportPDF = async () => {
   try {
     isProcessing.value = true
     const content = editor.getContent()
-    const pdfBytes = await pdfModifier!.exportToPDF(content)
+    const pdfBytes = await pdfModifier!.exportToPDF(content, [], {
+      ...props.exportOptions,
+      fileName: props.exportFileName,
+    })
     
-    const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `edited-document-${Date.now()}.pdf`
-    a.click()
-    URL.revokeObjectURL(url)
+    PDFModifier.downloadPDF(pdfBytes, `${props.exportFileName}-${Date.now()}.pdf`)
     
     emit('pdf-exported', pdfBytes)
   } catch (error) {
