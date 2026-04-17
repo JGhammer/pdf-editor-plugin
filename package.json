@@ -1,6 +1,6 @@
 {
   "name": "pdf-editor-plugin",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "A PDF editor plugin for Vue and React projects with rich text editing capabilities",
   "type": "module",
   "main": "dist/index.js",
