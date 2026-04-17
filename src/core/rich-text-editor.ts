@@ -39,6 +39,23 @@ export interface FontStyle {
   font?: string;
 }
 
+const TOOLBAR_LABELS: Record<string, string> = {
+  header: "标题",
+  bold: "加粗",
+  italic: "斜体",
+  underline: "下划线",
+  strike: "删除线",
+  color: "字体颜色",
+  background: "背景色",
+  align: "对齐",
+  list: "列表",
+  indent: "缩进",
+  link: "插入链接",
+  image: "插入图片",
+  video: "插入视频",
+  clean: "清除格式",
+};
+
 export class RichTextEditor {
   private quill: Quill | null = null;
   private container: HTMLElement | null = null;
@@ -62,6 +79,7 @@ export class RichTextEditor {
     this.initEditor();
     this.applyContainerStyle();
     this.applyDarkTheme();
+    this.applyToolbarLabels();
   }
 
   private initEditor() {
@@ -89,6 +107,104 @@ export class RichTextEditor {
     });
 
     this.setupEventHandlers();
+  }
+
+  private applyToolbarLabels() {
+    if (!this.container) return;
+
+    const toolbar = this.container.closest(".pdf-editor-wrapper")?.querySelector(".ql-toolbar");
+    if (!toolbar) return;
+
+    toolbar.querySelectorAll("button").forEach((btn) => {
+      const className = btn.className;
+      let label = "";
+
+      if (className.includes("ql-bold")) label = TOOLBAR_LABELS.bold;
+      else if (className.includes("ql-italic")) label = TOOLBAR_LABELS.italic;
+      else if (className.includes("ql-underline")) label = TOOLBAR_LABELS.underline;
+      else if (className.includes("ql-strike")) label = TOOLBAR_LABELS.strike;
+      else if (className.includes("ql-link")) label = TOOLBAR_LABELS.link;
+      else if (className.includes("ql-image")) label = TOOLBAR_LABELS.image;
+      else if (className.includes("ql-video")) label = TOOLBAR_LABELS.video;
+      else if (className.includes("ql-clean")) label = TOOLBAR_LABELS.clean;
+      else if (className.includes("ql-list")) {
+        label = btn.getAttribute("value") === "ordered" ? "有序列表" : "无序列表";
+      }
+      else if (className.includes("ql-indent")) {
+        label = btn.getAttribute("value") === "-1" ? "减少缩进" : "增加缩进";
+      }
+      else if (className.includes("ql-align")) label = TOOLBAR_LABELS.align;
+      else if (className.includes("ql-direction")) label = "文字方向";
+
+      if (label) {
+        btn.setAttribute("title", label);
+        const existing = btn.querySelector(".ql-tooltip-label");
+        if (!existing) {
+          const span = document.createElement("span");
+          span.className = "ql-tooltip-label";
+          span.textContent = label;
+          span.style.cssText = `
+            position: absolute;
+            bottom: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            white-space: nowrap;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+          `;
+          btn.style.position = "relative";
+          btn.appendChild(span);
+
+          btn.addEventListener("mouseenter", () => {
+            span.style.opacity = "1";
+          });
+          btn.addEventListener("mouseleave", () => {
+            span.style.opacity = "0";
+          });
+        }
+      }
+    });
+
+    toolbar.querySelectorAll(".ql-picker").forEach((picker) => {
+      let label = "";
+      const cls = picker.className;
+
+      if (cls.includes("ql-header")) label = "标题大小";
+      else if (cls.includes("ql-color")) label = "字体颜色";
+      else if (cls.includes("ql-background")) label = "背景颜色";
+      else if (cls.includes("ql-align")) label = "对齐方式";
+      else if (cls.includes("ql-font")) label = "字体";
+      else if (cls.includes("ql-size")) label = "字号";
+
+      if (label) {
+        picker.setAttribute("title", label);
+      }
+    });
+
+    const headerPicker = toolbar.querySelector(".ql-header .ql-picker-label");
+    if (headerPicker) {
+      const headerItems = toolbar.querySelectorAll(".ql-header .ql-picker-item");
+      const headerLabels: Record<string, string> = {
+        "1": "标题1",
+        "2": "标题2",
+        "3": "标题3",
+        "false": "正文",
+      };
+      headerItems.forEach((item) => {
+        const val = item.getAttribute("data-value") || "false";
+        const text = headerLabels[val];
+        if (text) {
+          item.textContent = text;
+        }
+      });
+    }
   }
 
   private applyContainerStyle() {
@@ -187,67 +303,68 @@ export class RichTextEditor {
         color: #eee !important;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
       }
-      
+
       .ql-toolbar.ql-snow {
         border: 1px solid #1a1a2e !important;
         background-color: #0f3460 !important;
         border-bottom: none !important;
+        flex-wrap: wrap;
       }
-      
+
       .ql-editor.ql-blank::before {
         color: #666 !important;
         font-style: normal !important;
       }
-      
+
       .ql-snow .ql-stroke {
         stroke: #00d9ff !important;
       }
-      
+
       .ql-snow .ql-fill {
         fill: #00d9ff !important;
       }
-      
+
       .ql-snow .ql-picker-label {
         color: #eee !important;
       }
-      
+
       .ql-snow .ql-picker-options {
         background-color: #1a1a2e !important;
         border: 1px solid #0f3460 !important;
       }
-      
+
       .ql-snow .ql-picker-item {
         color: #eee !important;
       }
-      
+
       .ql-snow .ql-picker-item:hover {
         background-color: #0f3460 !important;
         color: #00d9ff !important;
       }
-      
+
       .ql-snow button:hover,
       .ql-snow .ql-picker-label:hover {
         color: #00d9ff !important;
       }
-      
+
       .ql-snow .ql-active {
         color: #00d9ff !important;
       }
-      
+
       .ql-snow .ql-active .ql-stroke {
         stroke: #00d9ff !important;
       }
-      
+
       .ql-snow .ql-active .ql-fill {
         fill: #00d9ff !important;
       }
-      
+
       .ql-editor {
         min-height: 400px;
         padding: 20px;
         line-height: 1.6;
       }
-      
+
       .ql-editor img {
         max-width: 100%;
         height: auto;
@@ -256,9 +373,13 @@ export class RichTextEditor {
         cursor: pointer;
         transition: opacity 0.2s;
       }
-      
+
       .ql-editor img:hover {
         opacity: 0.8;
+      }
+
+      .ql-toolbar button {
+        position: relative;
       }
     `;
     document.head.appendChild(this.styleEl);

@@ -3,7 +3,7 @@ import commonjs from '@rollup/plugin-commonjs';
 import typescript from '@rollup/plugin-typescript';
 import postcss from 'rollup-plugin-postcss';
 
-const external = ['vue', 'react', 'react-dom', 'pdfjs-dist', 'pdf-lib', 'quill'];
+const external = ['vue', 'react', 'react-dom', 'pdfjs-dist', 'pdf-lib', 'quill', 'html2canvas', 'jspdf'];
 
 const commonPlugins = [
   postcss({

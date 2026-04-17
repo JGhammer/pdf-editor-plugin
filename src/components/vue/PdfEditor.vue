@@ -54,19 +54,7 @@
       </ul>
     </div>
 
-    <div class="image-replace-section" v-if="hasPDF">
-      <h4>图片替换</h4>
-      <input
-        type="file"
-        ref="imageInput"
-        accept="image/*"
-        @change="handleImageReplace"
-        style="display: none"
-      />
-      <button @click="triggerImageInput" class="replace-image-btn">
-        选择新图片替换
-      </button>
-    </div>
+
   </div>
 </template>
 

@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-//import Tesseract from "tesseract.js";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 let _workerInitialized = false;
 
@@ -67,16 +68,17 @@ const PAGE_SIZES: Record<string, [number, number]> = {
 
 export class PDFParser {
   private pdfDoc: pdfjsLib.PDFDocumentProxy | null = null;
-  private pdfBytes: ArrayBuffer | null = null;
+  private pdfBytes: Uint8Array | null = null;
 
   async loadPDF(file: File | ArrayBuffer): Promise<PDFPage[]> {
     if (file instanceof File) {
-      this.pdfBytes = await file.arrayBuffer();
+      const buf = await file.arrayBuffer();
+      this.pdfBytes = new Uint8Array(buf);
     } else {
-      this.pdfBytes = file;
+      this.pdfBytes = new Uint8Array(file);
     }
 
-    const loadingTask = pdfjsLib.getDocument({ data: this.pdfBytes });
+    const loadingTask = pdfjsLib.getDocument({ data: this.pdfBytes.slice() });
     this.pdfDoc = await loadingTask.promise;
 
     const pages: PDFPage[] = [];
@@ -94,7 +96,8 @@ export class PDFParser {
     this.pdfDoc = await loadingTask.promise;
 
     const response = await fetch(url);
-    this.pdfBytes = await response.arrayBuffer();
+    const buf = await response.arrayBuffer();
+    this.pdfBytes = new Uint8Array(buf);
 
     const pages: PDFPage[] = [];
     for (let i = 1; i <= this.pdfDoc.numPages; i++) {
@@ -187,22 +190,39 @@ export class PDFParser {
       const page = await this.pdfDoc.getPage(i);
       const textContent = await page.getTextContent();
 
-      const textMap = new Map<string, number>();
+      const textMap = new Map<string, { count: number; items: any[] }>();
       textContent.items.forEach((item: any) => {
         const str = item.str.trim();
         if (str.length > 0 && str.length < 50) {
-          textMap.set(str, (textMap.get(str) || 0) + 1);
+          const existing = textMap.get(str) || { count: 0, items: [] };
+          existing.count++;
+          existing.items.push(item);
+          textMap.set(str, existing);
         }
       });
 
-      textMap.forEach((count, text) => {
+      textMap.forEach(({ count, items }, text) => {
         if (count >= 3) {
-          watermarks.push({
-            type: "text",
-            content: text,
-            position: { x: 0, y: 0 },
-            opacity: 0.3,
+          const hasDiagonalPattern = items.some((item: any) => {
+            const transform = item.transform;
+            if (!transform) return false;
+            const a = Math.abs(transform[0] || 0);
+            const b = Math.abs(transform[1] || 0);
+            return b / (a + b) > 0.3;
           });
+
+          const hasLowOpacity = items.some((item: any) => {
+            return item.opacity !== undefined && item.opacity < 0.5;
+          });
+
+          if (hasDiagonalPattern || hasLowOpacity) {
+            watermarks.push({
+              type: "text",
+              content: text,
+              position: { x: 0, y: 0 },
+              opacity: 0.3,
+            });
+          }
         }
       });
     }
@@ -214,26 +234,34 @@ export class PDFParser {
     return this.pdfDoc;
   }
 
-  getPDFBytes(): ArrayBuffer | null {
+  getPDFBytes(): Uint8Array | null {
     return this.pdfBytes;
   }
 }
 
 export class PDFModifier {
   async removeWatermark(
-    pdfBytes: ArrayBuffer,
+    pdfBytes: ArrayBuffer | Uint8Array,
     watermarkTexts: string[],
   ): Promise<Uint8Array> {
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const bytes =
+      pdfBytes instanceof Uint8Array
+        ? pdfBytes.slice()
+        : new Uint8Array(pdfBytes);
+    const pdfDoc = await PDFDocument.load(bytes);
     return pdfDoc.save();
   }
 
   async replaceImage(
-    pdfBytes: ArrayBuffer,
+    pdfBytes: ArrayBuffer | Uint8Array,
     imageIndex: number,
     newImageFile: File,
   ): Promise<Uint8Array> {
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const bytes =
+      pdfBytes instanceof Uint8Array
+        ? pdfBytes.slice()
+        : new Uint8Array(pdfBytes);
+    const pdfDoc = await PDFDocument.load(bytes);
     const imageBytes = await newImageFile.arrayBuffer();
     let newImage;
 
@@ -247,7 +275,7 @@ export class PDFModifier {
   }
 
   async modifyTextStyles(
-    pdfBytes: ArrayBuffer,
+    pdfBytes: ArrayBuffer | Uint8Array,
     modifications: Array<{
       pageIndex: number;
       text: string;
@@ -256,7 +284,11 @@ export class PDFModifier {
       color?: { r: number; g: number; b: number };
     }>,
   ): Promise<Uint8Array> {
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const bytes =
+      pdfBytes instanceof Uint8Array
+        ? pdfBytes.slice()
+        : new Uint8Array(pdfBytes);
+    const pdfDoc = await PDFDocument.load(bytes);
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const pages = pdfDoc.getPages();
 
@@ -287,95 +319,68 @@ export class PDFModifier {
     images: File[] = [],
     options: ExportPDFOptions = {},
   ): Promise<Uint8Array> {
-    const {
-      fileName,
-      pageSize = "A4",
-      orientation = "portrait",
-      margin = 50,
-      fontSize = 12,
-      textColor,
-    } = options;
+    const { pageSize = "A4", orientation = "portrait" } = options;
 
-    const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const container = document.createElement("div");
+    container.style.cssText = `
+      position: fixed;
+      left: -9999px;
+      top: 0;
+      width: ${orientation === "portrait" ? "794px" : "1123px"};
+      background: white;
+      color: black;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
+      font-size: 14px;
+      line-height: 1.8;
+      padding: 40px;
+      box-sizing: border-box;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+    `;
+    container.innerHTML = content;
+    document.body.appendChild(container);
 
-    let pageWidth: number, pageHeight: number;
-    const size = PAGE_SIZES[pageSize] || PAGE_SIZES.A4;
-    if (orientation === "landscape") {
-      pageWidth = size[1];
-      pageHeight = size[0];
-    } else {
-      pageWidth = size[0];
-      pageHeight = size[1];
-    }
-
-    const textContent = this.stripHTML(content);
-    const lines = this.wrapText(
-      textContent,
-      font,
-      fontSize,
-      pageWidth - margin * 2,
-    );
-
-    let yPosition = pageHeight - margin;
-    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-
-    const textColorRgb = textColor
-      ? rgb(textColor.r / 255, textColor.g / 255, textColor.b / 255)
-      : rgb(0, 0, 0);
-
-    lines.forEach((line) => {
-      if (yPosition < margin + fontSize) {
-        currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-        yPosition = pageHeight - margin;
-      }
-      currentPage.drawText(line, {
-        x: margin,
-        y: yPosition,
-        size: fontSize,
-        font,
-        color: textColorRgb,
+    try {
+      const canvas = await html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
       });
-      yPosition -= fontSize * 1.5;
-    });
 
-    for (const imageFile of images) {
-      try {
-        const imageBytes = await imageFile.arrayBuffer();
-        let image;
-        if (imageFile.type === "image/png") {
-          image = await pdfDoc.embedPng(imageBytes);
-        } else {
-          image = await pdfDoc.embedJpg(imageBytes);
-        }
+      const imgData = canvas.toDataURL("image/png");
 
-        const imgPage = pdfDoc.addPage([pageWidth, pageHeight]);
-        const scaledWidth = Math.min(image.width, pageWidth - margin * 2);
-        const scaledHeight = (image.height * scaledWidth) / image.width;
+      const size = PAGE_SIZES[pageSize] || PAGE_SIZES.A4;
+      const pdfWidth = orientation === "landscape" ? size[1] : size[0];
+      const pdfHeight = orientation === "landscape" ? size[0] : size[1];
 
-        if (scaledHeight > pageHeight - margin * 2) {
-          const adjustedHeight = pageHeight - margin * 2;
-          const adjustedWidth = (image.width * adjustedHeight) / image.height;
-          imgPage.drawImage(image, {
-            x: (pageWidth - adjustedWidth) / 2,
-            y: (pageHeight - adjustedHeight) / 2,
-            width: adjustedWidth,
-            height: adjustedHeight,
-          });
-        } else {
-          imgPage.drawImage(image, {
-            x: (pageWidth - scaledWidth) / 2,
-            y: (pageHeight - scaledHeight) / 2,
-            width: scaledWidth,
-            height: scaledHeight,
-          });
-        }
-      } catch (error) {
-        console.error("Failed to embed image:", error);
+      const pdf = new jsPDF({
+        orientation: orientation === "landscape" ? "l" : "p",
+        unit: "pt",
+        format: pageSize.toLowerCase() as "a4" | "letter" | "legal",
+      });
+
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = -pdfHeight + (imgHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
       }
-    }
 
-    return pdfDoc.save();
+      const pdfOutput = pdf.output("arraybuffer");
+      return new Uint8Array(pdfOutput);
+    } finally {
+      document.body.removeChild(container);
+    }
   }
 
   static downloadPDF(pdfBytes: Uint8Array, fileName: string = "document.pdf") {
@@ -390,57 +395,5 @@ export class PDFModifier {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  }
-
-  private stripHTML(html: string): string {
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
-  }
-
-  private wrapText(
-    text: string,
-    font: any,
-    fontSize: number,
-    maxWidth: number,
-  ): string[] {
-    const paragraphs = text.split("\n");
-    const lines: string[] = [];
-
-    paragraphs.forEach((paragraph) => {
-      if (!paragraph.trim()) {
-        lines.push("");
-        return;
-      }
-
-      const words = paragraph.split(" ");
-      let currentLine = "";
-
-      words.forEach((word) => {
-        const testLine = currentLine + word + " ";
-        try {
-          const metrics = font.widthOfTextAtSize(testLine, fontSize);
-          if (metrics > maxWidth && currentLine !== "") {
-            lines.push(currentLine.trim());
-            currentLine = word + " ";
-          } else {
-            currentLine = testLine;
-          }
-        } catch {
-          if (currentLine.length + word.length > 80 && currentLine !== "") {
-            lines.push(currentLine.trim());
-            currentLine = word + " ";
-          } else {
-            currentLine = testLine;
-          }
-        }
-      });
-
-      if (currentLine) {
-        lines.push(currentLine.trim());
-      }
-    });
-
-    return lines;
   }
 }
