@@ -1,8 +1,5 @@
 # PDF Editor Plugin
 
-[![npm version](https://badge.fury.io/js/pdf-editor-plugin.svg)](https://badge.fury.io/js/pdf-editor-plugin)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
 一个PDF 编辑器插件，支持 **Vue 2**、**Vue 3** 和 **React 18** 项目。提供富文本编辑、图片替换、水印去除、自定义样式等功能。
 
 ## ✨ 功能特性
